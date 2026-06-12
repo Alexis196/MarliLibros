@@ -54,6 +54,22 @@ function ChevronRightIcon() {
   );
 }
 
+function HamburgerIcon() {
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+      <path d="M4 6h16M4 12h16M4 18h16" />
+    </svg>
+  );
+}
+
+function CloseIcon() {
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+      <path d="M18 6 6 18M6 6l12 12" />
+    </svg>
+  );
+}
+
 // ─── Category Icons ───────────────────────────────────────────────────────────
 
 function IconBook() {
@@ -256,6 +272,7 @@ const FOOTER_LINKS: Record<string, string[]> = {
 
 function Navbar() {
   const [scrolled, setScrolled] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 10);
@@ -267,16 +284,17 @@ function Navbar() {
     <nav
       className="bg-white sticky top-0 z-50 transition-all duration-300"
       style={{
-        borderBottom: '1px solid #F0EEF8',
         boxShadow: scrolled ? '0 2px 16px rgba(27,46,94,0.07)' : 'none',
       }}
     >
-      <div className="max-w-7xl mx-auto px-6 flex items-center justify-between h-16">
-        <div className="flex flex-col leading-none select-none">
-          <span className="text-2xl font-black tracking-tight" style={{ color: '#1B2E5E' }}>Marli</span>
-          <span className="text-[11px] font-extrabold tracking-[0.2em]" style={{ color: '#C9A227' }}>LIBROS</span>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 flex items-center justify-between h-20">
+        {/* Logo */}
+        <div className="flex flex-col leading-none select-none shrink-0">
+          <span className="text-3xl font-black tracking-tight" style={{ color: '#1B2E5E', fontFamily: 'var(--font-playfair)' }}>Marli</span>
+          <span className="text-[13px] font-extrabold tracking-[0.2em]" style={{ color: '#C9A227', fontFamily: 'var(--font-playfair)' }}>LIBROS</span>
         </div>
 
+        {/* Desktop nav links */}
         <div className="hidden md:flex items-center gap-5">
           {NAV_LINKS.map(link => (
             <button
@@ -294,9 +312,10 @@ function Navbar() {
           ))}
         </div>
 
-        <div className="flex items-center gap-4" style={{ color: '#1B2E5E' }}>
+        {/* Right: icons + hamburger */}
+        <div className="flex items-center gap-3 sm:gap-4" style={{ color: '#1B2E5E' }}>
           <button className="hover:opacity-60 transition-opacity"><SearchIcon /></button>
-          <button className="hover:opacity-60 transition-opacity"><UserIcon /></button>
+          <button className="hidden sm:block hover:opacity-60 transition-opacity"><UserIcon /></button>
           <button className="relative hover:opacity-60 transition-opacity">
             <CartIcon />
             <span
@@ -306,8 +325,39 @@ function Navbar() {
               2
             </span>
           </button>
+          {/* Hamburger — mobile only */}
+          <button
+            className="md:hidden p-1 hover:opacity-60 transition-opacity"
+            onClick={() => setMenuOpen(!menuOpen)}
+            aria-label={menuOpen ? 'Cerrar menú' : 'Abrir menú'}
+          >
+            {menuOpen ? <CloseIcon /> : <HamburgerIcon />}
+          </button>
         </div>
       </div>
+
+      {/* Mobile menu drawer */}
+      {menuOpen && (
+        <div className="md:hidden border-t border-gray-100 bg-white">
+          <div className="px-4 py-3 flex flex-col gap-0.5">
+            {NAV_LINKS.map(link => (
+              <button
+                key={link.label}
+                className={`flex items-center justify-between w-full py-2.5 px-3 rounded-xl text-left text-[15px] transition-colors ${
+                  link.active
+                    ? 'font-semibold bg-[#EEF0FA]'
+                    : 'font-medium text-gray-600 hover:bg-gray-50'
+                }`}
+                style={link.active ? { color: '#1B2E5E' } : {}}
+                onClick={() => setMenuOpen(false)}
+              >
+                <span>{link.label}</span>
+                {link.dropdown && <ChevronDownIcon />}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
     </nav>
   );
 }
@@ -397,34 +447,40 @@ function Hero() {
 
   return (
     <section
-      className="relative overflow-hidden min-h-[580px]"
+      className="relative overflow-hidden md:min-h-[580px]"
       style={{
-        background: 'linear-gradient(135deg, #EAE8F5 0%, #F0EFF9 50%, #EEF2FA 100%)',
+        background: '#EAE8F5',
         width: '95%',
         margin: '0 auto',
         borderRadius: '10px',
         boxShadow: '0 4px 24px rgba(0,0,0,0.07)',
       }}
     >
-      {/* Ilustración + radial glow dorado */}
-      <div className="absolute inset-y-0 right-0 hidden lg:block" style={{ left: '35%' }}>
-        <div
-          className="absolute inset-0 z-10"
-          style={{
-            background: 'radial-gradient(ellipse 60% 50% at 55% 50%, rgba(201,162,39,0.10) 0%, transparent 70%)',
-          }}
-        />
-        <Image
-          src="/4ce4f144-a8dd-46df-b175-d32931390f6f.png"
-          alt="Marli Libros"
-          fill
-          style={{ objectFit: 'cover', objectPosition: '20% center' }}
-          priority
-        />
-      </div>
+      {/* Imagen de fondo completa */}
+      <Image
+        src="/libroBG.png"
+        alt=""
+        fill
+        style={{ objectFit: 'cover', objectPosition: '65% center' }}
+        priority
+      />
 
-      <div className="relative z-10 max-w-7xl mx-auto px-6 py-20">
-        <div className="max-w-xl space-y-6">
+      {/* Overlay mobile: cubre toda la sección suavemente para que el texto sea legible */}
+      <div
+        className="absolute inset-0 z-10 lg:hidden"
+        style={{ background: 'rgba(234,232,245,0.82)' }}
+      />
+
+      {/* Overlay desktop: sólido a la izquierda, se desvanece hacia la ilustración */}
+      <div
+        className="absolute inset-0 z-10 hidden lg:block"
+        style={{
+          background: 'linear-gradient(to right, #EAE8F5 0%, #EAE8F5 28%, rgba(234,232,245,0.9) 42%, rgba(234,232,245,0.5) 58%, rgba(234,232,245,0.1) 72%, transparent 84%)',
+        }}
+      />
+
+      <div className="relative z-20 max-w-7xl mx-auto px-4 sm:px-6 py-12 md:py-20">
+        <div className="max-w-xl space-y-5 sm:space-y-6">
           <span
             className="inline-flex items-center gap-1.5 text-[11px] font-bold tracking-widest px-3 py-1 rounded border uppercase"
             style={{ color: '#C9A227', borderColor: '#C9A227', backgroundColor: '#fdf5f5' }}
@@ -434,7 +490,7 @@ function Hero() {
 
           <h1
             className="font-black tracking-tight leading-[1.05]"
-            style={{ color: '#1B2E5E', fontSize: 'clamp(44px, 5vw, 68px)' }}
+            style={{ color: '#1B2E5E', fontSize: 'clamp(38px, 5vw, 68px)' }}
           >
             Encontrá tu próxima historia
           </h1>
@@ -444,19 +500,19 @@ function Hero() {
           </p>
 
           <div className="space-y-2">
-            <div className="flex rounded-xl overflow-hidden shadow-sm border border-gray-200 bg-white max-w-md">
-              <div className="flex items-center gap-2 flex-1 px-4 text-gray-400">
+            <div className="flex rounded-xl overflow-hidden shadow-sm border border-gray-200 bg-white">
+              <div className="flex items-center gap-2 flex-1 px-3 sm:px-4 text-gray-400 min-w-0">
                 <SearchIcon />
                 <input
                   type="text"
-                  placeholder="Buscar libros, autores o editoriales..."
-                  className="flex-1 py-3 text-sm outline-none bg-transparent text-gray-600 placeholder-gray-400"
+                  placeholder="Buscar libros, autores..."
+                  className="flex-1 py-3 text-sm outline-none bg-transparent text-gray-600 placeholder-gray-400 min-w-0"
                   value={query}
                   onChange={e => setQuery(e.target.value)}
                 />
               </div>
               <button
-                className="px-5 py-3 text-sm font-semibold text-white shrink-0 hover:opacity-90 transition-opacity"
+                className="px-4 sm:px-5 py-3 text-sm font-semibold text-white shrink-0 hover:opacity-90 transition-opacity"
                 style={{ backgroundColor: '#1B2E5E' }}
               >
                 Buscar
@@ -467,7 +523,7 @@ function Hero() {
             </p>
           </div>
 
-          <div className="flex items-center gap-5">
+          <div className="flex flex-wrap items-center gap-3 sm:gap-5">
             <button
               className="flex items-center gap-2 px-5 py-3 rounded-xl text-sm font-semibold text-white hover:opacity-90 transition-opacity"
               style={{ backgroundColor: '#C9A227' }}
@@ -484,7 +540,7 @@ function Hero() {
         </div>
       </div>
 
-      <canvas ref={canvasRef} className="absolute inset-0 pointer-events-none" style={{ zIndex: 20 }} />
+      <canvas ref={canvasRef} className="absolute inset-0 pointer-events-none" style={{ zIndex: 30 }} />
     </section>
   );
 }
@@ -498,35 +554,35 @@ function Categories() {
   return (
     <section
       ref={ref}
-      className="py-16 bg-white"
+      className="py-12 sm:py-16 bg-white"
       style={{ opacity: 0, transform: 'translateY(24px)', transition: 'opacity 0.6s ease, transform 0.6s ease' }}
     >
-      <div className="max-w-7xl mx-auto px-6">
-        <div className="flex items-center justify-between mb-10">
-          <h2 className="text-2xl font-bold" style={{ color: '#1B2E5E' }}>Explorá por categoría</h2>
-          <button className="text-sm text-gray-400 hover:text-[#1B2E5E] transition-colors">
-            Ver todas las categorías →
+      <div className="max-w-7xl mx-auto px-4 sm:px-6">
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-8 sm:mb-10">
+          <h2 className="text-xl sm:text-2xl font-bold" style={{ color: '#1B2E5E' }}>Explorá por categoría</h2>
+          <button className="text-sm text-gray-400 hover:text-[#1B2E5E] transition-colors whitespace-nowrap">
+            Ver todas →
           </button>
         </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
+        <div className="grid grid-cols-3 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
           {CATEGORIES.map(cat => {
             const Icon = cat.Icon;
             return (
               <button
                 key={cat.name}
-                className="group flex flex-col items-center gap-3 p-5 bg-white rounded-2xl border border-gray-100 hover:border-[#C9A227] hover:-translate-y-1 transition-all cursor-pointer"
+                className="group flex flex-col items-center gap-2 sm:gap-3 p-3 sm:p-5 bg-white rounded-2xl border border-gray-100 hover:border-[#C9A227] hover:-translate-y-1 transition-all cursor-pointer"
                 onMouseEnter={e => { (e.currentTarget as HTMLElement).style.boxShadow = '0 4px 20px rgba(201,162,39,0.12)'; }}
                 onMouseLeave={e => { (e.currentTarget as HTMLElement).style.boxShadow = ''; }}
               >
                 <div
-                  className="w-16 h-16 rounded-2xl flex items-center justify-center"
+                  className="w-12 h-12 sm:w-16 sm:h-16 rounded-xl sm:rounded-2xl flex items-center justify-center"
                   style={{ backgroundColor: '#EEF0FA' }}
                 >
                   <Icon />
                 </div>
-                <span className="text-[13px] font-semibold text-center text-gray-700 leading-tight">{cat.name}</span>
-                <span className="text-[11px] text-gray-400 group-hover:text-[#C9A227] transition-colors">{cat.count} títulos</span>
+                <span className="text-[11px] sm:text-[13px] font-semibold text-center text-gray-700 leading-tight">{cat.name}</span>
+                <span className="text-[10px] sm:text-[11px] text-gray-400 group-hover:text-[#C9A227] transition-colors">{cat.count} títulos</span>
               </button>
             );
           })}
@@ -545,31 +601,31 @@ function FeaturedBooks() {
   return (
     <section
       ref={ref}
-      className="py-16 bg-gray-50"
+      className="py-12 sm:py-16 bg-gray-50"
       style={{ opacity: 0, transform: 'translateY(24px)', transition: 'opacity 0.6s ease, transform 0.6s ease' }}
     >
-      <div className="max-w-7xl mx-auto px-6">
-        <div className="flex items-center justify-between mb-10">
-          <h2 className="text-2xl font-bold" style={{ color: '#1B2E5E' }}>Novedades destacadas</h2>
-          <button className="text-sm text-gray-400 hover:text-[#1B2E5E] transition-colors">
-            Ver todas las novedades →
+      <div className="max-w-7xl mx-auto px-4 sm:px-6">
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-8 sm:mb-10">
+          <h2 className="text-xl sm:text-2xl font-bold" style={{ color: '#1B2E5E' }}>Novedades destacadas</h2>
+          <button className="text-sm text-gray-400 hover:text-[#1B2E5E] transition-colors whitespace-nowrap">
+            Ver todas →
           </button>
         </div>
 
         <div className="relative">
-          <button className="absolute -left-4 top-[45%] -translate-y-1/2 z-10 w-9 h-9 bg-white rounded-full shadow-md flex items-center justify-center text-gray-500 hover:text-[#1B2E5E] transition-colors border border-gray-100">
+          <button className="hidden sm:flex absolute -left-4 top-[45%] -translate-y-1/2 z-10 w-9 h-9 bg-white rounded-full shadow-md items-center justify-center text-gray-500 hover:text-[#1B2E5E] transition-colors border border-gray-100">
             <ChevronLeftIcon />
           </button>
 
           <div className="overflow-x-auto scrollbar-hide pb-2">
-            <div className="flex gap-4" style={{ width: 'max-content' }}>
+            <div className="flex gap-3 sm:gap-4" style={{ width: 'max-content' }}>
               {BOOKS.map((book, i) => (
                 <div
                   key={i}
-                  className="w-52 flex-shrink-0 bg-white rounded-2xl shadow-sm overflow-hidden hover:shadow-md transition-shadow"
+                  className="w-40 sm:w-52 flex-shrink-0 bg-white rounded-2xl shadow-sm overflow-hidden hover:shadow-md transition-shadow"
                 >
                   <div
-                    className="relative h-64 w-full"
+                    className="relative h-52 sm:h-64 w-full"
                     style={{ background: `linear-gradient(145deg, ${book.coverFrom} 0%, ${book.coverTo} 100%)` }}
                   >
                     {book.isNew && (
@@ -596,7 +652,7 @@ function FeaturedBooks() {
             </div>
           </div>
 
-          <button className="absolute -right-4 top-[45%] -translate-y-1/2 z-10 w-9 h-9 bg-white rounded-full shadow-md flex items-center justify-center text-gray-500 hover:text-[#1B2E5E] transition-colors border border-gray-100">
+          <button className="hidden sm:flex absolute -right-4 top-[45%] -translate-y-1/2 z-10 w-9 h-9 bg-white rounded-full shadow-md items-center justify-center text-gray-500 hover:text-[#1B2E5E] transition-colors border border-gray-100">
             <ChevronRightIcon />
           </button>
         </div>
@@ -609,15 +665,15 @@ function FeaturedBooks() {
 
 function Benefits() {
   return (
-    <section className="py-12" style={{ backgroundColor: '#1B2E5E' }}>
-      <div className="max-w-7xl mx-auto px-6">
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
+    <section className="py-10 sm:py-12" style={{ backgroundColor: '#1B2E5E' }}>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 sm:gap-6">
           {BENEFITS.map((b, i) => {
             const Icon = b.Icon;
             return (
               <div
                 key={i}
-                className={`flex items-center gap-4 text-white ${i > 0 ? 'lg:border-l lg:border-white/10 lg:pl-6' : ''}`}
+                className={`flex items-center gap-4 text-white ${i > 0 ? 'sm:border-t-0 lg:border-l lg:border-white/10 lg:pl-6' : ''}`}
               >
                 <div className="shrink-0 opacity-90">
                   <Icon />
@@ -644,27 +700,27 @@ function FeaturedAuthors() {
   return (
     <section
       ref={ref}
-      className="py-16 bg-white"
+      className="py-12 sm:py-16 bg-white"
       style={{ opacity: 0, transform: 'translateY(24px)', transition: 'opacity 0.6s ease, transform 0.6s ease' }}
     >
-      <div className="max-w-7xl mx-auto px-6">
-        <div className="flex items-center justify-between mb-10">
-          <h2 className="text-2xl font-bold" style={{ color: '#1B2E5E' }}>Autores destacados</h2>
-          <button className="text-sm text-gray-400 hover:text-[#1B2E5E] transition-colors">
-            Ver todos los autores →
+      <div className="max-w-7xl mx-auto px-4 sm:px-6">
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-8 sm:mb-10">
+          <h2 className="text-xl sm:text-2xl font-bold" style={{ color: '#1B2E5E' }}>Autores destacados</h2>
+          <button className="text-sm text-gray-400 hover:text-[#1B2E5E] transition-colors whitespace-nowrap">
+            Ver todos →
           </button>
         </div>
 
         <div className="relative">
-          <button className="absolute -left-4 top-[45%] -translate-y-1/2 z-10 w-9 h-9 bg-white rounded-full shadow-md flex items-center justify-center text-gray-500 hover:text-[#1B2E5E] transition-colors border border-gray-100">
+          <button className="hidden sm:flex absolute -left-4 top-[45%] -translate-y-1/2 z-10 w-9 h-9 bg-white rounded-full shadow-md items-center justify-center text-gray-500 hover:text-[#1B2E5E] transition-colors border border-gray-100">
             <ChevronLeftIcon />
           </button>
 
-          <div className="flex gap-10 overflow-x-auto scrollbar-hide pb-2 px-2">
+          <div className="flex gap-6 sm:gap-10 overflow-x-auto scrollbar-hide pb-2 px-1">
             {AUTHORS.map((author, i) => (
               <div key={i} className="flex flex-col items-center gap-3 flex-shrink-0 cursor-pointer group">
                 <div
-                  className="w-24 h-24 rounded-full flex items-center justify-center text-white text-xl font-bold group-hover:outline group-hover:outline-2 group-hover:outline-offset-2 transition-all"
+                  className="w-16 h-16 sm:w-24 sm:h-24 rounded-full flex items-center justify-center text-white text-base sm:text-xl font-bold group-hover:outline group-hover:outline-2 group-hover:outline-offset-2 transition-all"
                   style={{ backgroundColor: author.bg, outlineColor: '#C9A227' }}
                 >
                   {author.firstName[0]}{author.lastName[0]}
@@ -678,7 +734,7 @@ function FeaturedAuthors() {
             ))}
           </div>
 
-          <button className="absolute -right-4 top-[45%] -translate-y-1/2 z-10 w-9 h-9 bg-white rounded-full shadow-md flex items-center justify-center text-gray-500 hover:text-[#1B2E5E] transition-colors border border-gray-100">
+          <button className="hidden sm:flex absolute -right-4 top-[45%] -translate-y-1/2 z-10 w-9 h-9 bg-white rounded-full shadow-md items-center justify-center text-gray-500 hover:text-[#1B2E5E] transition-colors border border-gray-100">
             <ChevronRightIcon />
           </button>
         </div>
@@ -697,7 +753,7 @@ function Newsletter() {
   return (
     <section
       ref={ref}
-      className="py-20 text-center"
+      className="py-16 sm:py-20 text-center"
       style={{
         opacity: 0,
         transform: 'translateY(24px)',
@@ -705,7 +761,7 @@ function Newsletter() {
         background: 'linear-gradient(135deg, #1B2E5E 0%, #2A4380 100%)',
       }}
     >
-      <div className="max-w-lg mx-auto px-6">
+      <div className="max-w-lg mx-auto px-4 sm:px-6">
         <span
           className="inline-flex items-center gap-1.5 text-[11px] font-bold tracking-widest px-3 py-1 rounded border uppercase mb-6"
           style={{ color: '#C9A227', borderColor: 'rgba(201,162,39,0.4)', backgroundColor: 'rgba(201,162,39,0.08)' }}
@@ -713,14 +769,14 @@ function Newsletter() {
           ✦ Newsletter
         </span>
 
-        <h3 className="text-2xl font-bold text-white mb-3">
+        <h3 className="text-xl sm:text-2xl font-bold text-white mb-3">
           Lecturas, ofertas y novedades
         </h3>
         <p className="text-white/60 text-[14px] mb-8">
           Sin spam. Solo lo que vale la pena leer.
         </p>
 
-        <div className="flex gap-2 mb-4">
+        <div className="flex flex-col sm:flex-row gap-2 mb-4">
           <input
             type="email"
             placeholder="tu@email.com"
@@ -730,7 +786,7 @@ function Newsletter() {
             onChange={e => setEmail(e.target.value)}
           />
           <button
-            className="px-5 py-3 rounded-xl text-sm font-bold hover:opacity-90 transition-opacity whitespace-nowrap"
+            className="w-full sm:w-auto px-5 py-3 rounded-xl text-sm font-bold hover:opacity-90 transition-opacity whitespace-nowrap"
             style={{ backgroundColor: '#C9A227', color: '#1B2E5E' }}
           >
             Suscribirme
@@ -748,9 +804,9 @@ function Newsletter() {
 
 function Footer() {
   return (
-    <footer style={{ backgroundColor: '#12213F' }} className="text-white pt-14 pb-6 mt-auto">
-      <div className="max-w-7xl mx-auto px-6">
-        <div className="grid grid-cols-2 lg:grid-cols-5 gap-8 mb-10">
+    <footer style={{ backgroundColor: '#12213F' }} className="text-white pt-12 sm:pt-14 pb-6 mt-auto">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6">
+        <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-5 gap-8 mb-10">
           <div className="col-span-2 lg:col-span-1">
             <div className="flex flex-col leading-none mb-2">
               <span className="text-2xl font-black">Marli</span>
