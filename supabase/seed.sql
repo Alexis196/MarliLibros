@@ -13,6 +13,8 @@ create table if not exists public.authors (
   bio         text,
   photo_url   text,
   created_at  timestamptz default now()
+
+  
 );
 
 create table if not exists public.books (
