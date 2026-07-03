@@ -1,17 +1,21 @@
 import { supabaseAdmin } from './supabase-admin';
 
 export const BOOK_COVERS_BUCKET = 'book-covers';
+export const RECEIPTS_BUCKET    = 'receipts';
 
-let bucketEnsured = false;
+let bookCoversBucketEnsured = false;
+let receiptsBucketEnsured   = false;
 
-// Los buckets de Storage no se crean por SQL — se gestionan vía la Storage API.
-// Memoizado en el proceso para no pegarle a Supabase en cada upload.
 export async function ensureBookCoversBucket() {
-  if (bucketEnsured) return;
-
+  if (bookCoversBucketEnsured) return;
   const { data: bucket } = await supabaseAdmin.storage.getBucket(BOOK_COVERS_BUCKET);
-  if (!bucket) {
-    await supabaseAdmin.storage.createBucket(BOOK_COVERS_BUCKET, { public: true });
-  }
-  bucketEnsured = true;
+  if (!bucket) await supabaseAdmin.storage.createBucket(BOOK_COVERS_BUCKET, { public: true });
+  bookCoversBucketEnsured = true;
+}
+
+export async function ensureReceiptsBucket() {
+  if (receiptsBucketEnsured) return;
+  const { data: bucket } = await supabaseAdmin.storage.getBucket(RECEIPTS_BUCKET);
+  if (!bucket) await supabaseAdmin.storage.createBucket(RECEIPTS_BUCKET, { public: true });
+  receiptsBucketEnsured = true;
 }

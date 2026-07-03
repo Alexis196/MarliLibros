@@ -1,13 +1,17 @@
 import Link from 'next/link';
 import { TransactionalHeader, TransactionalFooter } from '@/components/TransactionalLayout';
 import { ClearCartOnMount } from '@/components/ClearCartOnMount';
+import { supabaseAdmin } from '@/lib/supabase-admin';
 
 async function getOrder(orderId: string | undefined) {
   if (!orderId) return null;
   try {
-    const res = await fetch(`${process.env.NEXT_PUBLIC_SITE_URL}/api/orders/${orderId}`, { cache: 'no-store' });
-    if (!res.ok) return null;
-    return res.json();
+    const { data } = await supabaseAdmin
+      .from('orders')
+      .select('id, status, customer_name, total_amount')
+      .eq('id', orderId)
+      .single();
+    return data ? { order: data } : null;
   } catch {
     return null;
   }

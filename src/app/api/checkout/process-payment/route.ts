@@ -27,13 +27,21 @@ type CardFormData = {
 export async function POST(req: NextRequest) {
   try {
     const { customer, items, couponCode, formData } = (await req.json()) as {
-      customer: { name: string; email: string; phone?: string; address: string };
+      customer: {
+        name: string;
+        email: string;
+        phone?: string;
+        address: string;
+        province: string;
+        postalCode: string;
+        reference: string;
+      };
       items: CartItemInput[];
       couponCode?: string;
       formData: CardFormData;
     };
 
-    if (!customer?.name || !customer?.email || !customer?.address) {
+    if (!customer?.name || !customer?.email || !customer?.address || !customer?.province || !customer?.postalCode || !customer?.reference) {
       return NextResponse.json({ error: 'Faltan datos del cliente.' }, { status: 400 });
     }
     if (!formData?.token) {
@@ -53,6 +61,9 @@ export async function POST(req: NextRequest) {
         customer_email: customer.email,
         customer_phone: customer.phone || null,
         shipping_address: customer.address,
+        province: customer.province,
+        postal_code: customer.postalCode,
+        address_reference: customer.reference,
         total_amount: totalAmount,
         coupon_code: appliedCoupon,
         discount_amount: discountAmount,
@@ -62,7 +73,8 @@ export async function POST(req: NextRequest) {
       .single();
 
     if (orderError || !order) {
-      return NextResponse.json({ error: 'No pudimos crear el pedido.' }, { status: 500 });
+      console.error('orders insert error', orderError);
+      return NextResponse.json({ error: `No pudimos crear el pedido: ${orderError?.message}` }, { status: 500 });
     }
 
     const { error: itemsError } = await supabaseAdmin
@@ -70,10 +82,14 @@ export async function POST(req: NextRequest) {
       .insert(orderItems.map(i => ({ ...i, order_id: order.id })));
 
     if (itemsError) {
-      return NextResponse.json({ error: 'No pudimos guardar los items del pedido.' }, { status: 500 });
+      console.error('order_items insert error', itemsError);
+      return NextResponse.json({ error: `No pudimos guardar los items: ${itemsError.message}` }, { status: 500 });
     }
 
-    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL!;
+    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL;
+    const notificationUrl = siteUrl && !siteUrl.includes('localhost')
+      ? `${siteUrl}/api/webhooks/mercadopago`
+      : undefined;
 
     const payment = await mpPayment.create({
       body: {
@@ -88,7 +104,7 @@ export async function POST(req: NextRequest) {
           identification: formData.payer?.identification,
         },
         external_reference: order.id,
-        notification_url: `${siteUrl}/api/webhooks/mercadopago`,
+        ...(notificationUrl && { notification_url: notificationUrl }),
       },
     });
 
@@ -110,6 +126,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ status, status_detail: payment.status_detail, order_id: order.id });
   } catch (err) {
     console.error('process-payment error', err);
-    return NextResponse.json({ error: 'Ocurrió un error al procesar el pago.' }, { status: 500 });
+    const message =
+      err instanceof Error
+        ? err.message
+        : typeof (err as { message?: string })?.message === 'string'
+          ? (err as { message: string }).message
+          : JSON.stringify(err);
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

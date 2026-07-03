@@ -2,6 +2,10 @@ import type { Metadata } from "next";
 import { Geist, Playfair_Display } from "next/font/google";
 import "./globals.css";
 import { CartProvider } from "@/contexts/CartContext";
+import { FavoritesProvider } from "@/contexts/FavoritesContext";
+import { StoreProvider } from "@/contexts/StoreContext";
+import { AuthorsProvider } from "@/contexts/AuthorsContext";
+import { BooksProvider } from "@/contexts/BooksContext";
 import { CartDrawer } from "@/components/CartDrawer";
 
 const geist = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
@@ -16,10 +20,18 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="es" className={`${geist.variable} ${playfair.variable} antialiased`}>
       <body className="min-h-screen flex flex-col">
-        <CartProvider>
-          {children}
-          <CartDrawer />
-        </CartProvider>
+        <StoreProvider>
+          <AuthorsProvider>
+            <BooksProvider>
+              <FavoritesProvider>
+                <CartProvider>
+                  {children}
+                  <CartDrawer />
+                </CartProvider>
+              </FavoritesProvider>
+            </BooksProvider>
+          </AuthorsProvider>
+        </StoreProvider>
       </body>
     </html>
   );

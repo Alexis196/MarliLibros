@@ -3,104 +3,12 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { useState, useRef, useEffect, RefObject } from 'react';
-import { supabase } from '@/lib/supabase';
-import { useCart } from '@/contexts/CartContext';
+import { useRouter } from 'next/navigation';
 import { Navbar } from '@/components/Navbar';
 import { Footer } from '@/components/Footer';
-
-type Book = {
-  id: string;
-  title: string;
-  author_name: string;
-  category: string;
-  price: number;
-  description?: string;
-  cover_url?: string;
-  new_until?: string;
-  rating?: number;
-  pages?: number;
-  year?: number;
-};
-
-type Author = {
-  id: string;
-  name: string;
-  nationality?: string;
-  bio?: string;
-  photo_url?: string;
-};
-
-function useStoreData() {
-  const [books, setBooks] = useState<Book[]>([]);
-  const [authors, setAuthors] = useState<Author[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    Promise.all([
-      supabase.from('books').select('*').order('created_at', { ascending: false }),
-      supabase.from('authors').select('*').order('name'),
-    ]).then(([booksRes, authorsRes]) => {
-      setBooks(booksRes.data ?? []);
-      setAuthors(authorsRes.data ?? []);
-      setLoading(false);
-    });
-  }, []);
-
-  const now = new Date().toISOString();
-  const novedades = books.filter(b => b.new_until && b.new_until > now);
-  const categoryCounts = books.reduce<Record<string, number>>((acc, b) => {
-    acc[b.category] = (acc[b.category] ?? 0) + 1;
-    return acc;
-  }, {});
-
-  return { books, novedades, authors, categoryCounts, loading };
-}
-
-function formatPrice(price: number) {
-  return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(price);
-}
-
-function BookCard({ book }: { book: Book }) {
-  const now = new Date().toISOString();
-  const isNew = book.new_until && book.new_until > now;
-  const { addItem } = useCart();
-  return (
-    <div className="w-40 sm:w-52 flex-shrink-0 bg-[#FCFBF8] rounded-2xl shadow-sm overflow-hidden hover:shadow-md transition-shadow">
-      <Link href={`/libro/${book.id}`}>
-        <div className="relative h-52 sm:h-64 w-full bg-gray-100">
-          {book.cover_url ? (
-            <img src={book.cover_url} alt={book.title} className="w-full h-full object-cover" />
-          ) : (
-            <div className="w-full h-full" style={{ background: 'linear-gradient(145deg, #345457, #587F82)' }} />
-          )}
-          {isNew && (
-            <span className="absolute top-2 left-2 text-white text-[9px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wide" style={{ backgroundColor: '#587F82' }}>
-              Nuevo
-            </span>
-          )}
-        </div>
-      </Link>
-      <div className="p-3">
-        <Link href={`/libro/${book.id}`} className="text-[12px] font-bold text-gray-800 leading-tight line-clamp-2 mb-0.5 hover:text-[#345457] transition-colors block">
-          {book.title}
-        </Link>
-        <Link href={`/catalogo?autor=${encodeURIComponent(book.author_name)}`} className="text-[11px] text-gray-400 mb-3 hover:text-[#345457] transition-colors block">
-          {book.author_name}
-        </Link>
-        <div className="flex items-center justify-between">
-          <span className="text-sm font-bold" style={{ color: '#345457' }}>{formatPrice(book.price)}</span>
-          <button
-            onClick={() => addItem(book)}
-            aria-label="Agregar al carrito"
-            className="w-7 h-7 rounded-full border border-gray-200 flex items-center justify-center text-gray-500 hover:bg-[#345457] hover:text-white hover:border-transparent transition-all"
-          >
-            <CartIcon size={14} />
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
+import { BookCard, type Book } from '@/components/BookCard';
+import { useStore } from '@/contexts/StoreContext';
+import { useAuthors, type Author } from '@/contexts/AuthorsContext';
 
 function BookCarousel({ books, loading }: { books: Book[]; loading: boolean }) {
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -125,7 +33,11 @@ function BookCarousel({ books, loading }: { books: Book[]; loading: boolean }) {
                   </div>
                 </div>
               ))
-            : books.map(book => <BookCard key={book.id} book={book} />)
+            : books.map(book => (
+                <div key={book.id} className="w-40 sm:w-52 flex-shrink-0">
+                  <BookCard book={book} />
+                </div>
+              ))
           }
         </div>
       </div>
@@ -142,15 +54,6 @@ function SearchIcon() {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
       <circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" />
-    </svg>
-  );
-}
-
-function CartIcon({ size = 20 }: { size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-      <circle cx="9" cy="21" r="1" /><circle cx="20" cy="21" r="1" />
-      <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6" />
     </svg>
   );
 }
@@ -297,17 +200,17 @@ const NAV_LINKS = [
 ];
 
 const CATEGORIES = [
-  { name: 'Libros', Icon: IconBook, count: '184' },
-  { name: 'Desarrollo Personal', Icon: IconBrain, count: '62' },
-  { name: 'Tarot y Oráculos', Icon: IconSparkles, count: '45' },
-  { name: 'Rompecabezas', Icon: IconPuzzle, count: '38' },
-  { name: 'Juegos Didácticos', Icon: IconDice, count: '71' },
-  { name: 'Agendas y Cuadernos', Icon: IconNotebook, count: '29' },
+  { name: 'Libros', Icon: IconBook },
+  { name: 'Desarrollo Personal', Icon: IconBrain },
+  { name: 'Tarot y Oráculos', Icon: IconSparkles },
+  { name: 'Rompecabezas', Icon: IconPuzzle },
+  { name: 'Juegos Didácticos', Icon: IconDice },
+  { name: 'Agendas y Cuadernos', Icon: IconNotebook },
 ];
 
 
 const BENEFITS = [
-  { Icon: IconTruck, title: 'Envíos en 24–48 hs', desc: 'A todo el país, desde $X en adelante' },
+  { Icon: IconTruck, title: 'Envíos en 24–48 hs', desc: 'A todo el país' },
   { Icon: IconLock, title: 'Compra 100% segura', desc: 'Tus datos siempre protegidos' },
   { Icon: IconBox, title: 'Stock garantizado', desc: 'Solo vendemos lo que tenemos' },
   { Icon: IconChat, title: 'Atención personalizada', desc: 'Respondemos en menos de 1 hora' },
@@ -315,9 +218,16 @@ const BENEFITS = [
 
 // ─── Hero ─────────────────────────────────────────────────────────────────────
 
-function Hero() {
+function Hero({ bookCount, hasNovedades }: { bookCount: number; hasNovedades: boolean }) {
   const [query, setQuery] = useState('');
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const router = useRouter();
+
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    const trimmed = query.trim();
+    router.push(trimmed ? `/catalogo?search=${encodeURIComponent(trimmed)}` : '/catalogo');
+  };
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -410,12 +320,14 @@ function Hero() {
       {/* Columna izquierda: texto */}
       <div className="relative z-20 flex-1 flex items-center px-4 sm:px-10 py-12 md:py-20">
         <div className="max-w-lg space-y-5 sm:space-y-6">
-          <span
-            className="inline-flex items-center gap-1.5 text-[11px] font-bold tracking-widest px-3 py-1 rounded border uppercase"
-            style={{ color: '#C8A86B', borderColor: '#C8A86B', backgroundColor: '#F7F6F2' }}
-          >
-            ✦ Novedades 2026
-          </span>
+          {hasNovedades && (
+            <span
+              className="inline-flex items-center gap-1.5 text-[11px] font-bold tracking-widest px-3 py-1 rounded border uppercase"
+              style={{ color: '#C8A86B', borderColor: '#C8A86B', backgroundColor: '#F7F6F2' }}
+            >
+              ✦ Novedades
+            </span>
+          )}
 
           <h1
             className="font-black tracking-tight leading-[1.12]"
@@ -429,7 +341,7 @@ function Hero() {
           </p>
 
           <div className="space-y-2">
-            <div className="flex rounded-xl overflow-hidden shadow-sm border border-gray-200 bg-[#FCFBF8]">
+            <form onSubmit={handleSearch} className="flex rounded-xl overflow-hidden shadow-sm border border-gray-200 bg-[#FCFBF8]">
               <div className="flex items-center gap-2 flex-1 px-3 sm:px-4 text-gray-400 min-w-0">
                 <SearchIcon />
                 <input
@@ -441,14 +353,15 @@ function Hero() {
                 />
               </div>
               <button
-                className="px-4 sm:px-5 py-3 text-sm font-semibold text-white shrink-0 hover:opacity-90 transition-opacity"
+                type="submit"
+                className="px-4 sm:px-5 py-3 text-sm font-semibold text-white shrink-0 hover:opacity-90 transition-opacity cursor-pointer"
                 style={{ backgroundColor: '#345457' }}
               >
                 Buscar
               </button>
-            </div>
+            </form>
             <p className="text-[12px] text-gray-400 pl-1">
-              ✦ Más de <strong className="text-gray-500">12.000 títulos</strong> disponibles
+              ✦ <strong className="text-gray-500">{bookCount.toLocaleString('es-AR')} títulos</strong> disponibles
             </p>
           </div>
 
@@ -460,13 +373,15 @@ function Hero() {
             >
               📖 Explorar catálogo
             </Link>
-            <Link
-              href="/catalogo?novedades=1"
-              className="flex items-center gap-1 text-sm font-medium transition-all hover:gap-2"
-              style={{ color: '#345457' }}
-            >
-              Ver novedades <span>→</span>
-            </Link>
+            {hasNovedades && (
+              <Link
+                href="/catalogo?novedades=1"
+                className="flex items-center gap-1 text-sm font-medium transition-all hover:gap-2"
+                style={{ color: '#345457' }}
+              >
+                Ver novedades <span>→</span>
+              </Link>
+            )}
           </div>
         </div>
       </div>
@@ -529,23 +444,39 @@ function Categories({ categoryCounts }: { categoryCounts: Record<string, number>
         </div>
 
         <div className="grid grid-cols-3 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
-          {CATEGORIES.map(cat => {
-            const Icon = cat.Icon;
-            const count = categoryCounts[cat.name] ?? 0;
-            return (
-              <Link
-                href={`/catalogo?categoria=${encodeURIComponent(cat.name)}`}
-                key={cat.name}
-                className="group flex flex-col items-center gap-3 sm:gap-4 p-4 sm:p-6 bg-white rounded-2xl border border-transparent shadow-sm hover:shadow-[0_12px_28px_rgba(52,84,87,0.14)] hover:-translate-y-1.5 transition-all duration-300 cursor-pointer"
-              >
-                <div className="text-[#345457]/70 group-hover:text-[#C8A86B] transition-colors duration-300 [&_svg]:w-5 [&_svg]:h-5 sm:[&_svg]:w-6 sm:[&_svg]:h-6">
-                  <Icon />
-                </div>
-                <span className="text-[13px] sm:text-[15px] font-bold text-center leading-tight" style={{ color: '#345457', fontFamily: 'var(--font-playfair)' }}>{cat.name}</span>
-                <span className="text-[10px] sm:text-[11px] text-gray-400 tracking-wide group-hover:text-[#C8A86B] transition-colors duration-300">{count} títulos</span>
-              </Link>
-            );
-          })}
+          {CATEGORIES
+            .map(cat => ({ ...cat, count: categoryCounts[cat.name] ?? 0 }))
+            .sort((a, b) => b.count - a.count)
+            .map(cat => {
+              const Icon = cat.Icon;
+              if (cat.count === 0) {
+                return (
+                  <div
+                    key={cat.name}
+                    className="flex flex-col items-center gap-3 sm:gap-4 p-4 sm:p-6 bg-white/60 rounded-2xl border border-transparent opacity-60 cursor-not-allowed"
+                  >
+                    <div className="text-[#345457]/40 [&_svg]:w-5 [&_svg]:h-5 sm:[&_svg]:w-6 sm:[&_svg]:h-6">
+                      <Icon />
+                    </div>
+                    <span className="text-[13px] sm:text-[15px] font-bold text-center leading-tight text-gray-400" style={{ fontFamily: 'var(--font-playfair)' }}>{cat.name}</span>
+                    <span className="text-[10px] sm:text-[11px] text-gray-400 tracking-wide uppercase">Próximamente</span>
+                  </div>
+                );
+              }
+              return (
+                <Link
+                  href={`/catalogo?categoria=${encodeURIComponent(cat.name)}`}
+                  key={cat.name}
+                  className="group flex flex-col items-center gap-3 sm:gap-4 p-4 sm:p-6 bg-white rounded-2xl border border-transparent shadow-sm hover:shadow-[0_12px_28px_rgba(52,84,87,0.14)] hover:-translate-y-1.5 transition-all duration-300 cursor-pointer"
+                >
+                  <div className="text-[#345457]/70 group-hover:text-[#C8A86B] transition-colors duration-300 [&_svg]:w-5 [&_svg]:h-5 sm:[&_svg]:w-6 sm:[&_svg]:h-6">
+                    <Icon />
+                  </div>
+                  <span className="text-[13px] sm:text-[15px] font-bold text-center leading-tight" style={{ color: '#345457', fontFamily: 'var(--font-playfair)' }}>{cat.name}</span>
+                  <span className="text-[10px] sm:text-[11px] text-gray-400 tracking-wide group-hover:text-[#C8A86B] transition-colors duration-300">{cat.count} títulos</span>
+                </Link>
+              );
+            })}
         </div>
       </div>
     </section>
@@ -654,7 +585,12 @@ function Benefits() {
 
 function FeaturedAuthors({ authors, loading }: { authors: Author[]; loading: boolean }) {
   const ref = useRef<HTMLElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
   useFadeUp(ref);
+
+  const scroll = (dir: 'left' | 'right') => {
+    scrollRef.current?.scrollBy({ left: dir === 'left' ? -240 : 240, behavior: 'smooth' });
+  };
 
   return (
     <section
@@ -665,17 +601,17 @@ function FeaturedAuthors({ authors, loading }: { authors: Author[]; loading: boo
       <div className="max-w-7xl mx-auto px-4 sm:px-6">
         <div className="flex flex-wrap items-center justify-between gap-3 mb-8 sm:mb-10">
           <h2 className="text-xl sm:text-2xl font-bold" style={{ color: '#345457' }}>Autores destacados</h2>
-          <button className="text-sm text-gray-400 hover:text-[#345457] transition-colors duration-300 whitespace-nowrap">
+          <Link href="/autores" className="text-sm text-gray-400 hover:text-[#345457] transition-colors duration-300 whitespace-nowrap">
             Ver todos →
-          </button>
+          </Link>
         </div>
 
         <div className="relative">
-          <button className="hidden sm:flex absolute -left-4 top-[45%] -translate-y-1/2 z-10 w-9 h-9 bg-[#FCFBF8] rounded-full shadow-md items-center justify-center text-gray-500 hover:text-[#345457] transition-colors duration-300 border border-gray-100">
+          <button onClick={() => scroll('left')} className="hidden sm:flex absolute -left-4 top-[45%] -translate-y-1/2 z-10 w-9 h-9 bg-[#FCFBF8] rounded-full shadow-md items-center justify-center text-gray-500 hover:text-[#345457] transition-colors duration-300 border border-gray-100 cursor-pointer">
             <ChevronLeftIcon />
           </button>
 
-          <div className="flex gap-6 sm:gap-10 overflow-x-auto scrollbar-hide pb-2 px-1">
+          <div ref={scrollRef} className="flex gap-6 sm:gap-10 overflow-x-auto scrollbar-hide pb-2 px-1">
             {loading
               ? Array.from({ length: 6 }).map((_, i) => (
                   <div key={i} className="flex flex-col items-center gap-3 flex-shrink-0 animate-pulse">
@@ -717,7 +653,7 @@ function FeaturedAuthors({ authors, loading }: { authors: Author[]; loading: boo
             }
           </div>
 
-          <button className="hidden sm:flex absolute -right-4 top-[45%] -translate-y-1/2 z-10 w-9 h-9 bg-[#FCFBF8] rounded-full shadow-md items-center justify-center text-gray-500 hover:text-[#345457] transition-colors duration-300 border border-gray-100">
+          <button onClick={() => scroll('right')} className="hidden sm:flex absolute -right-4 top-[45%] -translate-y-1/2 z-10 w-9 h-9 bg-[#FCFBF8] rounded-full shadow-md items-center justify-center text-gray-500 hover:text-[#345457] transition-colors duration-300 border border-gray-100 cursor-pointer">
             <ChevronRightIcon />
           </button>
         </div>
@@ -791,6 +727,7 @@ function AboutMarli() {
                 width={460}
                 height={460}
                 className="w-full object-contain"
+                style={{ height: 'auto' }}
               />
             </div>
 
@@ -885,8 +822,34 @@ function AboutMarli() {
 
 function Newsletter() {
   const [email, setEmail] = useState('');
+  const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+  const [message, setMessage] = useState('');
   const ref = useRef<HTMLElement>(null);
   useFadeUp(ref);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (status === 'loading') return;
+    setStatus('loading');
+    try {
+      const res = await fetch('/api/newsletter/subscribe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setStatus('success');
+        setEmail('');
+      } else {
+        setStatus('error');
+        setMessage(data.message ?? 'No pudimos procesar la suscripción.');
+      }
+    } catch {
+      setStatus('error');
+      setMessage('No pudimos procesar la suscripción.');
+    }
+  };
 
   return (
     <section
@@ -914,25 +877,30 @@ function Newsletter() {
           Sin spam. Solo lo que vale la pena leer.
         </p>
 
-        <div className="flex flex-col sm:flex-row gap-2 mb-4">
-          <input
-            type="email"
-            placeholder="tu@email.com"
-            className="flex-1 px-4 py-3 rounded-xl text-sm outline-none border text-white placeholder-white/40 focus:border-[#C8A86B] transition-colors"
-            style={{ backgroundColor: 'rgba(255,255,255,0.08)', borderColor: 'rgba(255,255,255,0.15)' }}
-            value={email}
-            onChange={e => setEmail(e.target.value)}
-          />
-          <button
-            className="w-full sm:w-auto px-5 py-3 rounded-xl text-sm font-bold hover:opacity-90 transition-opacity whitespace-nowrap"
-            style={{ backgroundColor: '#C8A86B', color: '#345457' }}
-          >
-            Suscribirme
-          </button>
-        </div>
-        <p className="text-[12px] text-white/40">
-          📚 +4.800 lectores ya suscritos
-        </p>
+        {status === 'success' ? (
+          <p className="text-[14px] font-semibold" style={{ color: '#C8A86B' }}>✓ ¡Listo! Ya estás suscripto.</p>
+        ) : (
+          <form onSubmit={handleSubmit} className="flex flex-col sm:flex-row gap-2 mb-2">
+            <input
+              type="email"
+              required
+              placeholder="tu@email.com"
+              className="flex-1 px-4 py-3 rounded-xl text-sm outline-none border text-white placeholder-white/40 focus:border-[#C8A86B] transition-colors"
+              style={{ backgroundColor: 'rgba(255,255,255,0.08)', borderColor: 'rgba(255,255,255,0.15)' }}
+              value={email}
+              onChange={e => setEmail(e.target.value)}
+            />
+            <button
+              type="submit"
+              disabled={status === 'loading'}
+              className="w-full sm:w-auto px-5 py-3 rounded-xl text-sm font-bold hover:opacity-90 transition-opacity whitespace-nowrap cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+              style={{ backgroundColor: '#C8A86B', color: '#345457' }}
+            >
+              {status === 'loading' ? 'Enviando...' : 'Suscribirme'}
+            </button>
+          </form>
+        )}
+        {status === 'error' && <p className="text-[12px] text-red-200">{message}</p>}
       </div>
     </section>
   );
@@ -941,15 +909,17 @@ function Newsletter() {
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function Home() {
-  const { books, novedades, authors, categoryCounts, loading } = useStoreData();
+  const { novedades, featuredBooks, totalBooks, categoryCounts, loading: storeLoading } = useStore();
+  const { authors, loading: authorsLoading } = useAuthors();
+  const loading = storeLoading || authorsLoading;
 
   return (
     <main style={{ backgroundColor: '#F7F6F2' }}>
       <Navbar />
-      <Hero />
+      <Hero bookCount={totalBooks} hasNovedades={novedades.length > 0} />
       <Categories categoryCounts={categoryCounts} />
       <Novedades books={novedades} loading={loading} />
-      <AllBooks books={books} loading={loading} />
+      <AllBooks books={featuredBooks} loading={loading} />
       <Benefits />
       <FeaturedAuthors authors={authors} loading={loading} />
       <AboutMarli />

@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useState, useRef, useEffect } from 'react';
 import { useCart } from '@/contexts/CartContext';
+import { useFavorites } from '@/contexts/FavoritesContext';
 
 const CATEGORY_NAMES = [
   'Libros',
@@ -12,14 +13,6 @@ const CATEGORY_NAMES = [
   'Juegos Didácticos',
   'Agendas y Cuadernos',
 ];
-
-function SearchIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-      <circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" />
-    </svg>
-  );
-}
 
 function UserIcon() {
   return (
@@ -34,6 +27,14 @@ function CartIcon() {
     <svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
       <circle cx="9" cy="21" r="1" /><circle cx="20" cy="21" r="1" />
       <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6" />
+    </svg>
+  );
+}
+
+function HeartIcon() {
+  return (
+    <svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
     </svg>
   );
 }
@@ -64,11 +65,12 @@ function CloseIcon() {
 
 export function Navbar() {
   const { totalItems, openDrawer } = useCart();
+  const { favoriteIds } = useFavorites();
   const [scrolled, setScrolled] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [catOpen, setCatOpen] = useState(false);
   const [mobileCatOpen, setMobileCatOpen] = useState(false);
-  const catTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const catRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 10);
@@ -76,13 +78,14 @@ export function Navbar() {
     return () => window.removeEventListener('scroll', onScroll);
   }, []);
 
-  const openCat = () => {
-    if (catTimer.current) clearTimeout(catTimer.current);
-    setCatOpen(true);
-  };
-  const closeCat = () => {
-    catTimer.current = setTimeout(() => setCatOpen(false), 120);
-  };
+  useEffect(() => {
+    if (!catOpen) return;
+    const onClickOutside = (e: MouseEvent) => {
+      if (catRef.current && !catRef.current.contains(e.target as Node)) setCatOpen(false);
+    };
+    document.addEventListener('mousedown', onClickOutside);
+    return () => document.removeEventListener('mousedown', onClickOutside);
+  }, [catOpen]);
 
   return (
     <nav
@@ -113,19 +116,21 @@ export function Navbar() {
 
         {/* Desktop nav links */}
         <div className="hidden md:flex items-center gap-5">
-          <div className="relative" onMouseEnter={openCat} onMouseLeave={closeCat}>
-            <Link
-              href="/catalogo"
-              className="group relative flex items-center gap-1 text-base font-medium text-gray-500 hover:text-[#345457] transition-colors duration-300 whitespace-nowrap"
+          <div className="relative" ref={catRef}>
+            <button
+              type="button"
+              onClick={() => setCatOpen(prev => !prev)}
+              className="group relative flex items-center gap-1 text-base font-medium text-gray-500 hover:text-[#345457] transition-colors duration-300 whitespace-nowrap cursor-pointer"
             >
-              Categorías <ChevronDownIcon />
+              Categorías
+              <span style={{ display: 'inline-block', transform: catOpen ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>
+                <ChevronDownIcon />
+              </span>
               <span className="absolute -bottom-1.5 left-0 h-px w-0 bg-[#C8A86B] transition-all duration-300 group-hover:w-[calc(100%-16px)]" />
-            </Link>
+            </button>
             {catOpen && (
               <div
                 className="absolute top-full left-0 mt-1 w-52 bg-[#FCFBF8] rounded-2xl shadow-xl border border-gray-100 py-2 z-50"
-                onMouseEnter={openCat}
-                onMouseLeave={closeCat}
               >
                 <Link
                   href="/catalogo"
@@ -159,9 +164,19 @@ export function Navbar() {
 
         {/* Right: icons + hamburger */}
         <div className="flex items-center gap-3 sm:gap-4" style={{ color: '#345457' }}>
-          <button className="hover:opacity-60 transition-opacity"><SearchIcon /></button>
-          <Link href="/login" aria-label="Iniciar sesión" className="hidden sm:block hover:opacity-60 transition-opacity"><UserIcon /></Link>
-          <button onClick={openDrawer} aria-label="Ver carrito" className="relative hover:opacity-60 transition-opacity">
+          <Link href="/login" aria-label="Iniciar sesión" className="hover:opacity-60 transition-opacity"><UserIcon /></Link>
+          <Link href="/favoritos" aria-label="Ver favoritos" className="relative hidden sm:block hover:opacity-60 transition-opacity">
+            <HeartIcon />
+            {favoriteIds.length > 0 && (
+              <span
+                className="absolute -top-1.5 -right-1.5 text-white text-[10px] font-bold rounded-full w-[18px] h-[18px] flex items-center justify-center"
+                style={{ backgroundColor: '#C8A86B' }}
+              >
+                {favoriteIds.length}
+              </span>
+            )}
+          </Link>
+          <button onClick={openDrawer} aria-label="Ver carrito" className="relative hover:opacity-60 transition-opacity cursor-pointer p-1.5 -m-1.5">
             <CartIcon />
             {totalItems > 0 && (
               <span
@@ -174,7 +189,7 @@ export function Navbar() {
           </button>
           {/* Hamburger — mobile only */}
           <button
-            className="md:hidden p-1 hover:opacity-60 transition-opacity"
+            className="md:hidden p-2 -m-1 hover:opacity-60 transition-opacity"
             onClick={() => setMenuOpen(!menuOpen)}
             aria-label={menuOpen ? 'Cerrar menú' : 'Abrir menú'}
           >
@@ -223,6 +238,22 @@ export function Navbar() {
               onClick={() => setMenuOpen(false)}
             >
               Novedades
+            </Link>
+            <Link
+              href="/favoritos"
+              className="flex items-center w-full py-2.5 px-3 rounded-xl text-[15px] font-medium text-gray-600 hover:bg-gray-50 transition-colors"
+              onClick={() => setMenuOpen(false)}
+            >
+              ♡ Favoritos
+            </Link>
+            <div className="my-1.5 h-px bg-gray-100 mx-1" />
+            <Link
+              href="/admin"
+              className="flex items-center w-full py-2.5 px-3 rounded-xl text-[15px] font-medium hover:bg-gray-50 transition-colors"
+              style={{ color: '#345457' }}
+              onClick={() => setMenuOpen(false)}
+            >
+              ⚙ Admin
             </Link>
           </div>
         </div>

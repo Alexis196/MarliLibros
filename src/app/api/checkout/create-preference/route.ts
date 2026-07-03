@@ -6,12 +6,20 @@ import { resolveOrder, buildDiscountedPreferenceItems, type CartItemInput } from
 export async function POST(req: NextRequest) {
   try {
     const { customer, items, couponCode } = (await req.json()) as {
-      customer: { name: string; email: string; phone?: string; address: string };
+      customer: {
+        name: string;
+        email: string;
+        phone?: string;
+        address: string;
+        province: string;
+        postalCode: string;
+        reference: string;
+      };
       items: CartItemInput[];
       couponCode?: string;
     };
 
-    if (!customer?.name || !customer?.email || !customer?.address) {
+    if (!customer?.name || !customer?.email || !customer?.address || !customer?.province || !customer?.postalCode || !customer?.reference) {
       return NextResponse.json({ error: 'Faltan datos del cliente.' }, { status: 400 });
     }
 
@@ -28,6 +36,9 @@ export async function POST(req: NextRequest) {
         customer_email: customer.email,
         customer_phone: customer.phone || null,
         shipping_address: customer.address,
+        province: customer.province,
+        postal_code: customer.postalCode,
+        address_reference: customer.reference,
         total_amount: totalAmount,
         coupon_code: appliedCoupon,
         discount_amount: discountAmount,
@@ -48,7 +59,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'No pudimos guardar los items del pedido.' }, { status: 500 });
     }
 
-    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL!;
+    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000';
+    const isProd = !!process.env.NEXT_PUBLIC_SITE_URL && !siteUrl.includes('localhost');
+    const notificationUrl = isProd ? `${siteUrl}/api/webhooks/mercadopago` : undefined;
 
     const preference = await mpPreference.create({
       body: {
@@ -62,9 +75,9 @@ export async function POST(req: NextRequest) {
           failure: `${siteUrl}/checkout/failure?order_id=${order.id}`,
           pending: `${siteUrl}/checkout/pending?order_id=${order.id}`,
         },
-        auto_return: 'approved',
+        ...(isProd && { auto_return: 'approved' }),
         external_reference: order.id,
-        notification_url: `${siteUrl}/api/webhooks/mercadopago`,
+        ...(notificationUrl && { notification_url: notificationUrl }),
       },
     });
 

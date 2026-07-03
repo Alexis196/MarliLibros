@@ -18,7 +18,11 @@ export async function finalizeApprovedOrder(orderId: string) {
     .select('title, author_name, price, quantity')
     .eq('order_id', orderId);
 
-  await sendOrderConfirmationEmail(order, items ?? []);
+  try {
+    await sendOrderConfirmationEmail(order, items ?? []);
+  } catch (err) {
+    console.error('sendOrderConfirmationEmail failed for order', orderId, err);
+  }
   await supabaseAdmin.from('orders').update({ email_sent: true }).eq('id', orderId);
 
   if (order.coupon_code) {

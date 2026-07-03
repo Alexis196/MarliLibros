@@ -3,31 +3,9 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
-import { useCart } from '@/contexts/CartContext';
 import { Navbar } from '@/components/Navbar';
 import { Footer } from '@/components/Footer';
-
-// ─── Types ────────────────────────────────────────────────────────────────────
-
-type Book = {
-  id: string;
-  title: string;
-  author_name: string;
-  category: string;
-  price: number;
-  description?: string;
-  cover_url?: string;
-  new_until?: string;
-  rating?: number;
-  pages?: number;
-  year?: number;
-};
-
-// ─── Utils ────────────────────────────────────────────────────────────────────
-
-function formatPrice(price: number) {
-  return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(price);
-}
+import { BookCard, type Book } from '@/components/BookCard';
 
 // ─── Icons ────────────────────────────────────────────────────────────────────
 
@@ -35,15 +13,6 @@ function SearchIcon() {
   return (
     <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
       <circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" />
-    </svg>
-  );
-}
-
-function CartIcon({ size = 20 }: { size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-      <circle cx="9" cy="21" r="1" /><circle cx="20" cy="21" r="1" />
-      <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6" />
     </svg>
   );
 }
@@ -67,64 +36,6 @@ const ALL_CATEGORIES = [
   'Agendas y Cuadernos',
 ];
 
-// ─── BookCard ─────────────────────────────────────────────────────────────────
-
-function BookCard({ book }: { book: Book }) {
-  const now = new Date().toISOString();
-  const isNew = book.new_until && book.new_until > now;
-  const { addItem } = useCart();
-
-  return (
-    <div
-      className="bg-white overflow-hidden group border border-black/5 transition-all duration-300 hover:-translate-y-1"
-      style={{ borderRadius: '18px', boxShadow: '0 8px 24px rgba(52,84,87,0.06)' }}
-      onMouseEnter={e => { (e.currentTarget as HTMLElement).style.boxShadow = '0 14px 32px rgba(52,84,87,0.13)'; }}
-      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.boxShadow = '0 8px 24px rgba(52,84,87,0.06)'; }}
-    >
-      <Link href={`/libro/${book.id}`}>
-        <div className="relative w-full bg-gray-100" style={{ paddingTop: '145%' }}>
-          {book.cover_url ? (
-            <img
-              src={book.cover_url}
-              alt={book.title}
-              className="absolute inset-0 w-full h-full object-cover group-hover:scale-[1.02] transition-transform duration-300"
-            />
-          ) : (
-            <div className="absolute inset-0" style={{ background: 'linear-gradient(145deg, #345457, #587F82)' }} />
-          )}
-          {isNew && (
-            <span
-              className="absolute top-2 left-2 text-white text-[9px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wide"
-              style={{ backgroundColor: '#587F82' }}
-            >
-              Nuevo
-            </span>
-          )}
-        </div>
-      </Link>
-      <div className="p-3.5">
-        <Link href={`/libro/${book.id}`} className="text-[12px] font-bold text-gray-800 leading-tight line-clamp-2 mb-1 hover:text-[#345457] transition-colors duration-300 block">
-          {book.title}
-        </Link>
-        <Link href={`/catalogo?autor=${encodeURIComponent(book.author_name)}`} className="text-[11px] text-gray-400 mb-1.5 hover:text-[#345457] transition-colors duration-300 block">
-          {book.author_name}
-        </Link>
-        <p className="text-[9px] font-semibold uppercase tracking-wide mb-3" style={{ color: '#7A9C96' }}>{book.category}</p>
-        <div className="flex items-center justify-between">
-          <span className="text-sm font-bold" style={{ color: '#345457' }}>{formatPrice(book.price)}</span>
-          <button
-            onClick={() => addItem(book)}
-            aria-label="Agregar al carrito"
-            className="w-7 h-7 rounded-full border border-gray-200 flex items-center justify-center text-gray-500 hover:bg-[#345457] hover:text-white hover:border-transparent transition-all duration-300"
-          >
-            <CartIcon size={14} />
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 // ─── Skeleton ─────────────────────────────────────────────────────────────────
 
 function SkeletonCard() {
@@ -140,51 +51,102 @@ function SkeletonCard() {
   );
 }
 
+const PAGE_SIZE = 20;
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function CatalogoPage() {
   const [books, setBooks] = useState<Book[]>([]);
+  const [totalCount, setTotalCount] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [page, setPage] = useState(0);
+  const [paramsReady, setParamsReady] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [showNovedades, setShowNovedades] = useState(false);
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [selectedAuthor, setSelectedAuthor] = useState<string | null>(null);
+  const [sortBy, setSortBy] = useState<'recientes' | 'precio_asc' | 'precio_desc' | 'rating' | 'az'>('recientes');
 
-  // Read URL params on mount
+  // Read URL params on mount — leer la URL solo es seguro en el cliente, no se puede mover a un lazy initializer sin romper SSR.
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const cat = params.get('categoria');
     const nov = params.get('novedades');
     const author = params.get('autor');
+    const searchParam = params.get('search');
     if (cat) setSelectedCategory(decodeURIComponent(cat));
     if (nov === '1') setShowNovedades(true);
     if (author) setSelectedAuthor(decodeURIComponent(author));
-  }, []);
-
-  // Fetch books
-  useEffect(() => {
-    supabase
-      .from('books')
-      .select('*')
-      .order('created_at', { ascending: false })
-      .then(({ data }) => {
-        setBooks(data ?? []);
-        setLoading(false);
-      });
-  }, []);
-
-  const now = new Date().toISOString();
-
-  const filtered = books.filter(b => {
-    if (showNovedades && !(b.new_until && b.new_until > now)) return false;
-    if (selectedCategory && b.category !== selectedCategory) return false;
-    if (selectedAuthor && b.author_name !== selectedAuthor) return false;
-    if (search) {
-      const q = search.toLowerCase();
-      if (!b.title.toLowerCase().includes(q) && !b.author_name.toLowerCase().includes(q)) return false;
+    if (searchParam) {
+      setSearch(decodeURIComponent(searchParam));
+      setDebouncedSearch(decodeURIComponent(searchParam));
     }
-    return true;
-  });
+    setParamsReady(true);
+  }, []);
+  /* eslint-enable react-hooks/set-state-in-effect */
+
+  // Debounce de la búsqueda para no disparar una query por cada tecla
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setPage(0);
+      setDebouncedSearch(search.trim());
+    }, 300);
+    return () => clearTimeout(t);
+  }, [search]);
+
+  const buildQuery = (from: number, to: number) => {
+    let q = supabase.from('books').select('*', { count: 'exact' });
+    if (showNovedades) q = q.gt('new_until', new Date().toISOString());
+    if (selectedCategory) q = q.eq('category', selectedCategory);
+    if (selectedAuthor) q = q.eq('author_name', selectedAuthor);
+    if (debouncedSearch) q = q.or(`title.ilike.%${debouncedSearch}%,author_name.ilike.%${debouncedSearch}%`);
+
+    switch (sortBy) {
+      case 'precio_asc':
+        q = q.order('price', { ascending: true });
+        break;
+      case 'precio_desc':
+        q = q.order('price', { ascending: false });
+        break;
+      case 'rating':
+        q = q.order('rating', { ascending: false, nullsFirst: false });
+        break;
+      case 'az':
+        q = q.order('title', { ascending: true });
+        break;
+      default:
+        q = q.order('created_at', { ascending: false });
+    }
+
+    return q.range(from, to);
+  };
+
+  // Fetch (primera página) cada vez que cambian los filtros/orden
+  useEffect(() => {
+    if (!paramsReady) return;
+    setLoading(true);
+    buildQuery(0, PAGE_SIZE - 1).then(({ data, count }) => {
+      setBooks(data ?? []);
+      setTotalCount(count ?? 0);
+      setLoading(false);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [paramsReady, selectedCategory, showNovedades, selectedAuthor, debouncedSearch, sortBy]);
+
+  const loadMore = () => {
+    const nextPage = page + 1;
+    setLoadingMore(true);
+    buildQuery(nextPage * PAGE_SIZE, nextPage * PAGE_SIZE + PAGE_SIZE - 1).then(({ data }) => {
+      setBooks(prev => [...prev, ...(data ?? [])]);
+      setPage(nextPage);
+      setLoadingMore(false);
+    });
+  };
+
+  const hasMore = books.length < totalCount;
 
   const pageTitle = selectedAuthor
     ? `Libros de ${selectedAuthor}`
@@ -195,18 +157,24 @@ export default function CatalogoPage() {
     : 'Catálogo completo';
 
   const selectCategory = (cat: string | null) => {
+    setLoading(true);
+    setPage(0);
     setSelectedCategory(cat);
     setShowNovedades(false);
     setSelectedAuthor(null);
   };
 
   const selectNovedades = () => {
+    setLoading(true);
+    setPage(0);
     setShowNovedades(true);
     setSelectedCategory(null);
     setSelectedAuthor(null);
   };
 
   const selectAll = () => {
+    setLoading(true);
+    setPage(0);
     setSelectedCategory(null);
     setShowNovedades(false);
     setSelectedAuthor(null);
@@ -242,13 +210,13 @@ export default function CatalogoPage() {
                 className="text-[12px] font-semibold px-3 py-1.5 rounded-full whitespace-nowrap"
                 style={{ backgroundColor: 'white', color: '#345457' }}
               >
-                {loading ? 'Cargando…' : `${filtered.length} ${filtered.length === 1 ? 'título encontrado' : 'títulos encontrados'}`}
+                {loading ? 'Cargando…' : `${totalCount} ${totalCount === 1 ? 'título encontrado' : 'títulos encontrados'}`}
               </span>
             </div>
 
-            {/* Search bar */}
-            <div className="mb-4 lg:max-w-sm">
-              <div className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 transition-all duration-300 focus-within:border-[#345457] focus-within:shadow-[0_0_0_3px_rgba(52,84,87,0.08)]">
+            {/* Search bar + orden */}
+            <div className="mb-4 flex flex-col sm:flex-row gap-3">
+              <div className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 transition-all duration-300 focus-within:border-[#345457] focus-within:shadow-[0_0_0_3px_rgba(52,84,87,0.08)] sm:max-w-sm flex-1">
                 <span className="text-gray-400"><SearchIcon /></span>
                 <input
                   type="text"
@@ -258,9 +226,20 @@ export default function CatalogoPage() {
                   className="flex-1 py-2.5 text-sm outline-none bg-transparent text-gray-700 placeholder-gray-400"
                 />
                 {search && (
-                  <button onClick={() => setSearch('')} className="text-gray-300 hover:text-gray-500 text-xs">✕</button>
+                  <button onClick={() => setSearch('')} className="text-gray-300 hover:text-gray-500 text-xs cursor-pointer">✕</button>
                 )}
               </div>
+              <select
+                value={sortBy}
+                onChange={e => { setLoading(true); setPage(0); setSortBy(e.target.value as typeof sortBy); }}
+                className="rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-700 outline-none transition-all duration-300 focus:border-[#345457] cursor-pointer sm:w-auto"
+              >
+                <option value="recientes">Más recientes</option>
+                <option value="precio_asc">Precio: menor a mayor</option>
+                <option value="precio_desc">Precio: mayor a menor</option>
+                <option value="rating">Mejor calificados</option>
+                <option value="az">Alfabético (A-Z)</option>
+              </select>
             </div>
 
             {/* Filter pills */}
@@ -300,7 +279,7 @@ export default function CatalogoPage() {
               ))}
               {selectedAuthor && (
                 <button
-                  onClick={() => setSelectedAuthor(null)}
+                  onClick={() => { setLoading(true); setPage(0); setSelectedAuthor(null); }}
                   className="flex items-center gap-1.5 px-4 py-1.5 rounded-full text-sm font-medium border transition-colors duration-300"
                   style={{ backgroundColor: '#C8A86B', color: '#345457', borderColor: '#C8A86B' }}
                 >
@@ -319,7 +298,7 @@ export default function CatalogoPage() {
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
                 {Array.from({ length: 10 }).map((_, i) => <SkeletonCard key={i} />)}
               </div>
-            ) : filtered.length === 0 ? (
+            ) : books.length === 0 ? (
               <div className="text-center py-24">
                 <p className="text-4xl mb-4">📚</p>
                 <p className="text-gray-500 text-lg font-medium mb-2">Sin resultados</p>
@@ -333,9 +312,23 @@ export default function CatalogoPage() {
                 </button>
               </div>
             ) : (
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-                {filtered.map(book => <BookCard key={book.id} book={book} />)}
-              </div>
+              <>
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                  {books.map(book => <BookCard key={book.id} book={book} />)}
+                </div>
+                {hasMore && (
+                  <div className="flex justify-center mt-8">
+                    <button
+                      onClick={loadMore}
+                      disabled={loadingMore}
+                      className="px-6 py-2.5 rounded-xl text-sm font-semibold border cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed transition-colors duration-300"
+                      style={{ color: '#345457', borderColor: '#345457' }}
+                    >
+                      {loadingMore ? 'Cargando…' : 'Cargar más'}
+                    </button>
+                  </div>
+                )}
+              </>
             )}
           </div>
         </div>

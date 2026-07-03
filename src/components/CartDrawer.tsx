@@ -60,14 +60,14 @@ export function CartDrawer() {
                       <div className="flex items-center gap-1.5">
                         <button
                           onClick={() => updateQuantity(item.bookId, item.quantity - 1)}
-                          className="w-5 h-5 rounded-full border border-gray-200 text-gray-500 text-xs hover:border-[#345457] hover:text-[#345457] transition-colors duration-300"
+                          className="w-7 h-7 rounded-full border border-gray-200 text-gray-500 text-sm hover:border-[#345457] hover:text-[#345457] transition-colors duration-300"
                         >
                           −
                         </button>
-                        <span className="w-5 text-center text-[12px] text-gray-700">{item.quantity}</span>
+                        <span className="w-6 text-center text-[12px] text-gray-700">{item.quantity}</span>
                         <button
                           onClick={() => updateQuantity(item.bookId, item.quantity + 1)}
-                          className="w-5 h-5 rounded-full border border-gray-200 text-gray-500 text-xs hover:border-[#345457] hover:text-[#345457] transition-colors duration-300"
+                          className="w-7 h-7 rounded-full border border-gray-200 text-gray-500 text-sm hover:border-[#345457] hover:text-[#345457] transition-colors duration-300"
                         >
                           +
                         </button>

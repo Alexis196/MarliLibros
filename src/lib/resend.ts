@@ -14,6 +14,9 @@ type Order = {
   customer_name: string;
   customer_email: string;
   shipping_address: string;
+  province?: string | null;
+  postal_code?: string | null;
+  address_reference?: string | null;
   total_amount: number;
   coupon_code?: string | null;
   discount_amount?: number;
@@ -41,6 +44,15 @@ export async function sendOrderConfirmationEmail(order: Order, items: OrderItem[
 
   const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
   const discountAmount = order.discount_amount ?? 0;
+
+  const provinceLine = [order.province, order.postal_code && `CP ${order.postal_code}`].filter(Boolean).join(', ');
+  const addressLines = [
+    order.shipping_address,
+    provinceLine,
+    order.address_reference ? `Referencia: ${order.address_reference}` : '',
+  ]
+    .filter(Boolean)
+    .join('<br/>');
 
   const discountRow = discountAmount > 0
     ? `<tr>
@@ -75,7 +87,7 @@ export async function sendOrderConfirmationEmail(order: Order, items: OrderItem[
           </table>
         </div>
         <p style="color:#5b6b69;font-size:13px;line-height:1.6;margin:24px 0 0;">
-          <strong style="color:#1E3134;">Envío a:</strong><br/>${order.shipping_address}
+          <strong style="color:#1E3134;">Envío a:</strong><br/>${addressLines}
         </p>
         <p style="color:#9aa6a4;font-size:11px;margin:24px 0 0;">N° de pedido: ${order.id}</p>
       </div>

@@ -9,6 +9,33 @@ import { TransactionalHeader, TransactionalFooter } from '@/components/Transacti
 
 const MP_PUBLIC_KEY = process.env.NEXT_PUBLIC_MERCADOPAGO_PUBLIC_KEY;
 
+const PROVINCES = [
+  'Buenos Aires',
+  'Catamarca',
+  'Chaco',
+  'Chubut',
+  'Ciudad Autónoma de Buenos Aires',
+  'Córdoba',
+  'Corrientes',
+  'Entre Ríos',
+  'Formosa',
+  'Jujuy',
+  'La Pampa',
+  'La Rioja',
+  'Mendoza',
+  'Misiones',
+  'Neuquén',
+  'Río Negro',
+  'Salta',
+  'San Juan',
+  'San Luis',
+  'Santa Cruz',
+  'Santa Fe',
+  'Santiago del Estero',
+  'Tierra del Fuego',
+  'Tucumán',
+];
+
 function formatPrice(price: number) {
   return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(price);
 }
@@ -18,7 +45,15 @@ type AppliedCoupon = { code: string; discountAmount: number };
 export default function CheckoutPage() {
   const router = useRouter();
   const { items, totalPrice } = useCart();
-  const [form, setForm] = useState({ name: '', email: '', phone: '', address: '' });
+  const [form, setForm] = useState({
+    name: '',
+    email: '',
+    phone: '',
+    address: '',
+    province: '',
+    postalCode: '',
+    reference: '',
+  });
   const [activeTab, setActiveTab] = useState<'card' | 'mercadopago'>('card');
 
   const [couponInput, setCouponInput] = useState('');
@@ -28,18 +63,24 @@ export default function CheckoutPage() {
 
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [mpReady, setMpReady] = useState(false);
 
   const discountAmount = appliedCoupon?.discountAmount ?? 0;
   const finalTotal = Math.round((totalPrice - discountAmount) * 100) / 100;
 
   useEffect(() => {
-    if (MP_PUBLIC_KEY) initMercadoPago(MP_PUBLIC_KEY, { locale: 'es-AR' });
+    if (MP_PUBLIC_KEY) {
+      initMercadoPago(MP_PUBLIC_KEY, { locale: 'es-AR' });
+      setMpReady(true);
+    }
   }, []);
 
-  const update = (field: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) =>
-    setForm(prev => ({ ...prev, [field]: e.target.value }));
+  const update =
+    (field: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
+      setForm(prev => ({ ...prev, [field]: e.target.value }));
 
-  const missingShippingData = () => !form.name || !form.email || !form.address;
+  const missingShippingData = () =>
+    !form.name || !form.email || !form.address || !form.province || !form.postalCode || !form.reference;
 
   const applyCoupon = async () => {
     if (!couponInput.trim()) return;
@@ -212,9 +253,46 @@ export default function CheckoutPage() {
                     <input
                       required
                       type="text"
-                      placeholder="Calle, número, ciudad, provincia, CP"
+                      placeholder="Calle, número, ciudad"
                       value={form.address}
                       onChange={update('address')}
+                      className="w-full rounded-xl border border-gray-200 px-3.5 py-2.5 text-sm outline-none transition-all duration-300 focus:border-[#345457] focus:shadow-[0_0_0_3px_rgba(52,84,87,0.08)]"
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[12px] font-medium text-gray-500 mb-1.5">Provincia</label>
+                      <select
+                        required
+                        value={form.province}
+                        onChange={update('province')}
+                        className="w-full rounded-xl border border-gray-200 px-3.5 py-2.5 text-sm outline-none transition-all duration-300 focus:border-[#345457] focus:shadow-[0_0_0_3px_rgba(52,84,87,0.08)]"
+                      >
+                        <option value="" disabled>Elegir…</option>
+                        {PROVINCES.map(p => (
+                          <option key={p} value={p}>{p}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-[12px] font-medium text-gray-500 mb-1.5">Código postal</label>
+                      <input
+                        required
+                        type="text"
+                        value={form.postalCode}
+                        onChange={update('postalCode')}
+                        className="w-full rounded-xl border border-gray-200 px-3.5 py-2.5 text-sm outline-none transition-all duration-300 focus:border-[#345457] focus:shadow-[0_0_0_3px_rgba(52,84,87,0.08)]"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-[12px] font-medium text-gray-500 mb-1.5">Referencia (piso, depto, entre calles, etc.)</label>
+                    <textarea
+                      required
+                      rows={2}
+                      value={form.reference}
+                      onChange={update('reference')}
+                      placeholder="Ej: Depto 4B, timbre 2, entre San Martín y Belgrano"
                       className="w-full rounded-xl border border-gray-200 px-3.5 py-2.5 text-sm outline-none transition-all duration-300 focus:border-[#345457] focus:shadow-[0_0_0_3px_rgba(52,84,87,0.08)]"
                     />
                   </div>
@@ -234,7 +312,8 @@ export default function CheckoutPage() {
                         : 'bg-white text-gray-500 border-gray-200 hover:border-[#345457]/30 hover:text-[#345457]'
                     }`}
                   >
-                    💳 Tarjeta de crédito/débito
+                    <span className="sm:hidden">💳 Tarjeta</span>
+                    <span className="hidden sm:inline">💳 Tarjeta de crédito/débito</span>
                   </button>
                   <button
                     type="button"
@@ -252,7 +331,7 @@ export default function CheckoutPage() {
                 {error && <p className="text-sm text-red-500 mb-4">{error}</p>}
 
                 {activeTab === 'card' ? (
-                  MP_PUBLIC_KEY ? (
+                  mpReady ? (
                     <CardPayment
                       key={finalTotal}
                       initialization={{ amount: finalTotal }}
@@ -264,9 +343,9 @@ export default function CheckoutPage() {
                       }}
                     />
                   ) : (
-                    <p className="text-sm text-gray-400">
-                      El pago con tarjeta todavía no está configurado. Probá con la opción Mercado Pago.
-                    </p>
+                    <div className="flex items-center justify-center py-10">
+                      <div className="w-6 h-6 rounded-full border-2 border-gray-200 border-t-[#345457] animate-spin" />
+                    </div>
                   )
                 ) : (
                   <div>
