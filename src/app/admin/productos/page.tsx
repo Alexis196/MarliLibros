@@ -3,12 +3,11 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import { useAdminProducts, type AdminProduct, type ProductsPageStats } from '@/contexts/AdminProductsContext';
+import { CATEGORY_NAMES as CATEGORIES } from '@/lib/categories';
 
 const BRAND = '#345457';
 const GOLD  = '#C8A86B';
 const LIMIT = 40;
-
-const CATEGORIES = ['Libros','Desarrollo Personal','Tarot y Oráculos','Rompecabezas','Juegos Didácticos','Agendas y Cuadernos'];
 
 function fmtPrice(n: number) {
   return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(n);

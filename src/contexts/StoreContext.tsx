@@ -3,15 +3,7 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { supabase } from '@/lib/supabase';
 import type { Book } from '@/components/BookCard';
-
-const CATEGORY_NAMES = [
-  'Libros',
-  'Desarrollo Personal',
-  'Tarot y Oráculos',
-  'Rompecabezas',
-  'Juegos Didácticos',
-  'Agendas y Cuadernos',
-];
+import { CATEGORY_NAMES } from '@/lib/categories';
 
 const NOVEDADES_LIMIT = 12;
 const FEATURED_LIMIT = 12;

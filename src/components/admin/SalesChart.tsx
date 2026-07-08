@@ -34,15 +34,17 @@ function tooltipFormatter(value: unknown, name: unknown) {
   return [formatPrice(num), name as React.ReactNode] as [string, React.ReactNode];
 }
 
+const SKELETON_HEIGHTS = [55, 70, 40, 65, 80, 35, 75, 50, 60, 45, 70, 55];
+
 function ChartSkeleton() {
   return (
     <div className="h-72 animate-pulse">
       <div className="flex items-end justify-around h-full gap-2 px-4 pb-6">
-        {Array.from({ length: 12 }).map((_, i) => (
+        {SKELETON_HEIGHTS.map((h, i) => (
           <div key={i} className="flex-1 flex flex-col gap-1 items-center justify-end h-full">
             <div
               className="w-full rounded-t-md bg-gray-100"
-              style={{ height: `${20 + Math.random() * 60}%` }}
+              style={{ height: `${h}%` }}
             />
             <div className="w-4 h-2 bg-gray-100 rounded mt-1" />
           </div>

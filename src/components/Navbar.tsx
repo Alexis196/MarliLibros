@@ -4,15 +4,7 @@ import Link from 'next/link';
 import { useState, useRef, useEffect } from 'react';
 import { useCart } from '@/contexts/CartContext';
 import { useFavorites } from '@/contexts/FavoritesContext';
-
-const CATEGORY_NAMES = [
-  'Libros',
-  'Desarrollo Personal',
-  'Tarot y Oráculos',
-  'Rompecabezas',
-  'Juegos Didácticos',
-  'Agendas y Cuadernos',
-];
+import { CATEGORY_NAMES } from '@/lib/categories';
 
 function UserIcon() {
   return (

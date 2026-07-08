@@ -1,0 +1,15 @@
+export const CATEGORY_NAMES = [
+  'Ficción',
+  'Fantasía',
+  'Romance',
+  'Terror y Suspenso',
+  'Ciencia Ficción',
+  'Clásicos',
+  'Infantil y Juvenil',
+  'Autoayuda',
+  'No Ficción',
+  'Tarot y Oráculos',
+  'Rompecabezas',
+  'Juegos Didácticos',
+  'Agendas y Cuadernos',
+];

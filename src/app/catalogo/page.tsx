@@ -6,6 +6,7 @@ import { supabase } from '@/lib/supabase';
 import { Navbar } from '@/components/Navbar';
 import { Footer } from '@/components/Footer';
 import { BookCard, type Book } from '@/components/BookCard';
+import { CATEGORY_NAMES as ALL_CATEGORIES } from '@/lib/categories';
 
 // ─── Icons ────────────────────────────────────────────────────────────────────
 
@@ -24,17 +25,6 @@ function FilterIcon() {
     </svg>
   );
 }
-
-// ─── Constants ────────────────────────────────────────────────────────────────
-
-const ALL_CATEGORIES = [
-  'Libros',
-  'Desarrollo Personal',
-  'Tarot y Oráculos',
-  'Rompecabezas',
-  'Juegos Didácticos',
-  'Agendas y Cuadernos',
-];
 
 // ─── Skeleton ─────────────────────────────────────────────────────────────────
 

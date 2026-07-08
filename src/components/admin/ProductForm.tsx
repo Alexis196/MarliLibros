@@ -5,11 +5,10 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { convertImageToWebp } from '@/lib/image-conversion';
 import { useAdminProducts } from '@/contexts/AdminProductsContext';
+import { CATEGORY_NAMES as CATEGORIES } from '@/lib/categories';
 
 const BRAND = '#345457';
 const GOLD  = '#C8A86B';
-
-const CATEGORIES = ['Libros','Desarrollo Personal','Tarot y Oráculos','Rompecabezas','Juegos Didácticos','Agendas y Cuadernos'];
 const LANGUAGES  = ['Español','Inglés','Portugués','Francés','Alemán','Italiano','Otro'];
 const BINDINGS   = ['Tapa blanda','Tapa dura','Bolsillo','Espiral','Digital'];
 

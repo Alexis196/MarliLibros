@@ -1,5 +1,6 @@
 import Image from 'next/image';
 import Link from 'next/link';
+import { CATEGORY_NAMES } from '@/lib/categories';
 
 function IconInstagram() {
   return (
@@ -64,8 +65,6 @@ const PAYMENT_METHODS = [
   { name: 'Mastercard', Icon: IconMastercard },
   { name: 'MercadoPago', Icon: IconMercadoPago },
 ];
-
-const CATEGORY_NAMES = ['Libros', 'Desarrollo Personal', 'Tarot y Oráculos', 'Rompecabezas', 'Juegos Didácticos', 'Agendas y Cuadernos'];
 
 const FOOTER_LINKS: Record<string, { label: string; href: string }[]> = {
   Institucional: [
