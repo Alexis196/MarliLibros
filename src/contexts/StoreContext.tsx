@@ -45,14 +45,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     const now = new Date().toISOString();
 
     Promise.all([
-      supabase.from('books').select('*').gt('new_until', now).order('created_at', { ascending: false }).limit(NOVEDADES_LIMIT),
-      supabase.from('books').select('*').eq('featured', true).order('created_at', { ascending: false }).limit(FEATURED_LIMIT),
-      supabase.from('books').select('id', { count: 'exact', head: true }),
+      supabase.from('books').select('*').eq('status', 'published').gt('new_until', now).order('created_at', { ascending: false }).limit(NOVEDADES_LIMIT),
+      supabase.from('books').select('*').eq('status', 'published').eq('featured', true).order('created_at', { ascending: false }).limit(FEATURED_LIMIT),
+      supabase.from('books').select('id', { count: 'exact', head: true }).eq('status', 'published'),
       Promise.all(
         CATEGORY_NAMES.map(name =>
           supabase
             .from('books')
             .select('id', { count: 'exact', head: true })
+            .eq('status', 'published')
             .eq('category', name)
             .then(({ count }) => [name, count ?? 0] as const)
         )
@@ -63,6 +64,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         const { data: recent } = await supabase
           .from('books')
           .select('*')
+          .eq('status', 'published')
           .order('created_at', { ascending: false })
           .limit(FEATURED_LIMIT);
         featured = recent ?? [];

@@ -3,6 +3,7 @@ import { supabaseAdmin } from '@/lib/supabase-admin';
 import { mpPayment } from '@/lib/mercadopago';
 import { finalizeApprovedOrder } from '@/lib/order-fulfillment';
 import { resolveOrder, type CartItemInput } from '@/lib/checkout-helpers';
+import { rejectionMessage } from '@/lib/mp-errors';
 
 const STATUS_MAP: Record<string, string> = {
   approved: 'approved',
@@ -32,6 +33,7 @@ export async function POST(req: NextRequest) {
         email: string;
         phone?: string;
         address: string;
+        city: string;
         province: string;
         postalCode: string;
         reference: string;
@@ -41,11 +43,15 @@ export async function POST(req: NextRequest) {
       formData: CardFormData;
     };
 
-    if (!customer?.name || !customer?.email || !customer?.address || !customer?.province || !customer?.postalCode || !customer?.reference) {
+    if (!customer?.name || !customer?.email || !customer?.address || !customer?.city || !customer?.province || !customer?.postalCode || !customer?.reference) {
       return NextResponse.json({ error: 'Faltan datos del cliente.' }, { status: 400 });
     }
     if (!formData?.token) {
       return NextResponse.json({ error: 'Faltan datos de la tarjeta.' }, { status: 400 });
+    }
+    if (!process.env.MERCADOPAGO_ACCESS_TOKEN) {
+      console.error('MERCADOPAGO_ACCESS_TOKEN no está configurado');
+      return NextResponse.json({ error: 'El pago con tarjeta no está disponible en este momento.' }, { status: 503 });
     }
 
     const resolved = await resolveOrder(items, couponCode);
@@ -61,6 +67,7 @@ export async function POST(req: NextRequest) {
         customer_email: customer.email,
         customer_phone: customer.phone || null,
         shipping_address: customer.address,
+        city: customer.city,
         province: customer.province,
         postal_code: customer.postalCode,
         address_reference: customer.reference,
@@ -91,22 +98,37 @@ export async function POST(req: NextRequest) {
       ? `${siteUrl}/api/webhooks/mercadopago`
       : undefined;
 
-    const payment = await mpPayment.create({
-      body: {
-        transaction_amount: totalAmount,
-        token: formData.token,
-        description: 'Compra en Marli Libros',
-        installments: formData.installments,
-        payment_method_id: formData.payment_method_id,
-        issuer_id: formData.issuer_id ? Number(formData.issuer_id) : undefined,
-        payer: {
-          email: formData.payer?.email || customer.email,
-          identification: formData.payer?.identification,
+    let payment;
+    try {
+      payment = await mpPayment.create({
+        body: {
+          transaction_amount: totalAmount,
+          token: formData.token,
+          description: 'Compra en Marli Libros',
+          installments: formData.installments,
+          payment_method_id: formData.payment_method_id,
+          issuer_id: formData.issuer_id ? Number(formData.issuer_id) : undefined,
+          payer: {
+            email: formData.payer?.email || customer.email,
+            identification: formData.payer?.identification,
+          },
+          external_reference: order.id,
+          ...(notificationUrl && { notification_url: notificationUrl }),
         },
-        external_reference: order.id,
-        ...(notificationUrl && { notification_url: notificationUrl }),
-      },
-    });
+      });
+    } catch (mpErr) {
+      // La API de MP rechazó la request (token vencido, credenciales inválidas, monto
+      // inválido, etc.). Marcamos el pedido para que no quede "pending" fantasma.
+      console.error('mercadopago payment.create error', JSON.stringify(mpErr, Object.getOwnPropertyNames(mpErr as object)));
+      await supabaseAdmin
+        .from('orders')
+        .update({ status: 'rejected', mp_status_detail: (mpErr as Error)?.message?.slice(0, 250) ?? 'mp_api_error' })
+        .eq('id', order.id);
+      return NextResponse.json(
+        { error: 'No pudimos procesar el pago con Mercado Pago. Revisá los datos de la tarjeta e intentá de nuevo.' },
+        { status: 502 }
+      );
+    }
 
     const status = STATUS_MAP[payment.status ?? ''] ?? 'pending';
 
@@ -123,15 +145,15 @@ export async function POST(req: NextRequest) {
       await finalizeApprovedOrder(order.id);
     }
 
-    return NextResponse.json({ status, status_detail: payment.status_detail, order_id: order.id });
+    return NextResponse.json({
+      status,
+      status_detail: payment.status_detail,
+      order_id: order.id,
+      // Mensaje listo para mostrar si fue rechazado (el cliente puede reintentar en el momento).
+      ...(status === 'rejected' && { message: rejectionMessage(payment.status_detail) }),
+    });
   } catch (err) {
     console.error('process-payment error', err);
-    const message =
-      err instanceof Error
-        ? err.message
-        : typeof (err as { message?: string })?.message === 'string'
-          ? (err as { message: string }).message
-          : JSON.stringify(err);
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json({ error: 'Ocurrió un error al procesar el pago. Intentá de nuevo.' }, { status: 500 });
   }
 }

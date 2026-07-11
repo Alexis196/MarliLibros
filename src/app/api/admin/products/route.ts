@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAdmin } from '@/lib/admin-auth';
 import { supabaseAdmin } from '@/lib/supabase-admin';
+import { sanitizeProductInput, type ProductInput } from '@/lib/product-input';
 
 const NEW_WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
 
@@ -54,15 +55,19 @@ export async function GET(req: NextRequest) {
     .range(offset, offset + limit - 1);
 
   if (search) {
-    const parts = [
-      `title.ilike.%${search}%`,
-      `author_name.ilike.%${search}%`,
-      `isbn.ilike.%${search}%`,
-      `publisher.ilike.%${search}%`,
-      `sku.ilike.%${search}%`,
-      `category.ilike.%${search}%`,
-    ];
-    query = query.or(parts.join(','));
+    // Comas y paréntesis rompen la sintaxis del filtro or() de PostgREST
+    const safe = search.replace(/[,()]/g, ' ').trim();
+    if (safe) {
+      const parts = [
+        `title.ilike.%${safe}%`,
+        `author_name.ilike.%${safe}%`,
+        `isbn.ilike.%${safe}%`,
+        `publisher.ilike.%${safe}%`,
+        `sku.ilike.%${safe}%`,
+        `category.ilike.%${safe}%`,
+      ];
+      query = query.or(parts.join(','));
+    }
   }
 
   if (category) query = query.eq('category', category);
@@ -84,31 +89,6 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({ books: data ?? [], total: count ?? 0 });
 }
 
-type ProductInput = {
-  title: string;
-  author_name: string;
-  category: string;
-  price: number;
-  cost_price?: number;
-  promotional_price?: number;
-  description?: string;
-  cover_url?: string;
-  pages?: number;
-  year?: number;
-  rating?: number;
-  isNew?: boolean;
-  featured?: boolean;
-  stock?: number;
-  isbn?: string;
-  publisher?: string;
-  language?: string;
-  sku?: string;
-  binding?: string;
-  edition?: string;
-  tags?: string[];
-  status?: string;
-};
-
 export async function POST(req: NextRequest) {
   const auth = await requireAdmin();
   if (!auth.ok) return auth.response;
@@ -120,14 +100,18 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Faltan datos obligatorios.' }, { status: 400 });
     }
 
-    const { isNew, ...rest } = body;
+    const sanitized = sanitizeProductInput(body);
+    if ('error' in sanitized) {
+      return NextResponse.json({ error: sanitized.error }, { status: 400 });
+    }
+    const { isNew, ...rest } = sanitized.value;
 
     const { data, error } = await supabaseAdmin
       .from('books')
       .insert({
         ...rest,
         new_until: isNew ? new Date(Date.now() + NEW_WINDOW_MS).toISOString() : null,
-        status: body.status ?? 'published',
+        status: rest.status ?? 'published',
       })
       .select()
       .single();

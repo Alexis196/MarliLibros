@@ -1,6 +1,7 @@
 'use client';
 
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import { effectivePrice } from '@/lib/pricing';
 
 export type CartItem = {
   bookId: string;
@@ -16,6 +17,7 @@ type AddableBook = {
   title: string;
   author_name: string;
   price: number;
+  promotional_price?: number | null;
   cover_url?: string;
 };
 
@@ -62,7 +64,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
       if (existing) {
         return prev.map(i => (i.bookId === book.id ? { ...i, quantity: i.quantity + 1 } : i));
       }
-      return [...prev, { bookId: book.id, title: book.title, author_name: book.author_name, price: book.price, cover_url: book.cover_url, quantity: 1 }];
+      return [...prev, { bookId: book.id, title: book.title, author_name: book.author_name, price: effectivePrice(book), cover_url: book.cover_url, quantity: 1 }];
     });
     setIsDrawerOpen(true);
   };

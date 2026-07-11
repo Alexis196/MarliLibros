@@ -2,8 +2,10 @@ import Link from 'next/link';
 import { TransactionalHeader, TransactionalFooter } from '@/components/TransactionalLayout';
 import { ClearCartOnMount } from '@/components/ClearCartOnMount';
 import { supabaseAdmin } from '@/lib/supabase-admin';
+import { mpPayment } from '@/lib/mercadopago';
+import { finalizeApprovedOrder } from '@/lib/order-fulfillment';
 
-async function getOrder(orderId: string | undefined) {
+async function getOrder(orderId: string | undefined, paymentId: string | undefined) {
   if (!orderId) return null;
   try {
     const { data } = await supabaseAdmin
@@ -11,15 +13,36 @@ async function getOrder(orderId: string | undefined) {
       .select('id, status, customer_name, total_amount')
       .eq('id', orderId)
       .single();
-    return data ? { order: data } : null;
+    if (!data) return null;
+
+    // Al volver de Checkout Pro, MP agrega payment_id a la back_url. Si el webhook
+    // todavía no llegó (o no existe, p. ej. en localhost), conciliamos acá mismo
+    // consultando el pago directo a la API — nunca confiamos en el status de la URL.
+    if (data.status === 'pending' && paymentId) {
+      try {
+        const payment = await mpPayment.get({ id: paymentId });
+        if (payment.external_reference === orderId && payment.status === 'approved') {
+          await supabaseAdmin
+            .from('orders')
+            .update({ status: 'approved', mp_payment_id: String(payment.id), mp_status_detail: payment.status_detail ?? null })
+            .eq('id', orderId);
+          await finalizeApprovedOrder(orderId);
+          return { order: { ...data, status: 'approved' } };
+        }
+      } catch (err) {
+        console.error('No se pudo conciliar el pago al volver de Checkout Pro', orderId, err);
+      }
+    }
+
+    return { order: data };
   } catch {
     return null;
   }
 }
 
-export default async function CheckoutSuccessPage({ searchParams }: { searchParams: Promise<{ order_id?: string }> }) {
-  const { order_id } = await searchParams;
-  const data = await getOrder(order_id);
+export default async function CheckoutSuccessPage({ searchParams }: { searchParams: Promise<{ order_id?: string; payment_id?: string }> }) {
+  const { order_id, payment_id } = await searchParams;
+  const data = await getOrder(order_id, payment_id);
 
   return (
     <>

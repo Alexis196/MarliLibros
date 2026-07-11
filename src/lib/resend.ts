@@ -1,6 +1,12 @@
 import { Resend } from 'resend';
 
-const resend = new Resend(process.env.RESEND_API_KEY!);
+// Lazy: el constructor de Resend tira si la key falta, y a nivel de módulo eso
+// rompe el build entero (Next evalúa el módulo al recolectar page data).
+let _resend: Resend | null = null;
+function getResend(): Resend {
+  if (!_resend) _resend = new Resend(process.env.RESEND_API_KEY!);
+  return _resend;
+}
 
 type OrderItem = {
   title: string;
@@ -14,6 +20,7 @@ type Order = {
   customer_name: string;
   customer_email: string;
   shipping_address: string;
+  city?: string | null;
   province?: string | null;
   postal_code?: string | null;
   address_reference?: string | null;
@@ -45,7 +52,7 @@ export async function sendOrderConfirmationEmail(order: Order, items: OrderItem[
   const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
   const discountAmount = order.discount_amount ?? 0;
 
-  const provinceLine = [order.province, order.postal_code && `CP ${order.postal_code}`].filter(Boolean).join(', ');
+  const provinceLine = [order.city, order.province, order.postal_code && `CP ${order.postal_code}`].filter(Boolean).join(', ');
   const addressLines = [
     order.shipping_address,
     provinceLine,
@@ -94,7 +101,12 @@ export async function sendOrderConfirmationEmail(order: Order, items: OrderItem[
     </div>
   `;
 
-  await resend.emails.send({
+  if (!process.env.RESEND_API_KEY) {
+    console.warn('RESEND_API_KEY no configurada: no se envió el email de confirmación del pedido', order.id);
+    return;
+  }
+
+  await getResend().emails.send({
     from: process.env.EMAIL_FROM!,
     to: order.customer_email,
     subject: 'Confirmación de tu compra — Marli Libros',

@@ -8,7 +8,8 @@ export async function GET(req: NextRequest) {
 
   const sp = req.nextUrl.searchParams;
   const dispatchOnly = sp.get('dispatch') === '1';
-  const search = sp.get('search')?.trim() ?? '';
+  // Comas y paréntesis rompen la sintaxis del filtro or() de PostgREST
+  const search = (sp.get('search')?.trim() ?? '').replace(/[,()]/g, ' ').trim();
   const statusFilter = sp.get('status') ?? '';
   const dateFilter = sp.get('date') ?? '';
   const minAmount = sp.get('min_amount') ? Number(sp.get('min_amount')) : null;

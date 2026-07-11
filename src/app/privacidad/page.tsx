@@ -7,8 +7,8 @@ export default function PrivacidadPage() {
 
       <h2>1. Datos que recolectamos</h2>
       <p>
-        Recolectamos los datos que nos proporcionás al crear una cuenta, realizar una compra o
-        suscribirte a nuestro newsletter: nombre, email, teléfono y dirección de envío.
+        Recolectamos los datos que nos proporcionás al crear una cuenta o realizar una compra:
+        nombre, email, teléfono y dirección de envío.
       </p>
 
       <h2>2. Uso de los datos</h2>

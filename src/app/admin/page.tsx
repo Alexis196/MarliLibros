@@ -103,7 +103,7 @@ export default async function AdminDashboardPage() {
       delta: null,
       accent: stats.pendingDispatch > 0,
       urgent: stats.pendingDispatch >= 5,
-      href: '/admin/pedidos?filter=pending',
+      href: '/admin/pedidos?dispatch=1',
       sub: stats.pendingDispatch > 0 ? 'Requieren envío' : 'Al día ✓',
     },
     {

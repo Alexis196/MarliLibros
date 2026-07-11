@@ -11,6 +11,7 @@ export async function POST(req: NextRequest) {
         email: string;
         phone?: string;
         address: string;
+        city: string;
         province: string;
         postalCode: string;
         reference: string;
@@ -19,7 +20,7 @@ export async function POST(req: NextRequest) {
       couponCode?: string;
     };
 
-    if (!customer?.name || !customer?.email || !customer?.address || !customer?.province || !customer?.postalCode || !customer?.reference) {
+    if (!customer?.name || !customer?.email || !customer?.address || !customer?.city || !customer?.province || !customer?.postalCode || !customer?.reference) {
       return NextResponse.json({ error: 'Faltan datos del cliente.' }, { status: 400 });
     }
 
@@ -36,6 +37,7 @@ export async function POST(req: NextRequest) {
         customer_email: customer.email,
         customer_phone: customer.phone || null,
         shipping_address: customer.address,
+        city: customer.city,
         province: customer.province,
         postal_code: customer.postalCode,
         address_reference: customer.reference,

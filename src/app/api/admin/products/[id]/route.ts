@@ -1,33 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAdmin } from '@/lib/admin-auth';
 import { supabaseAdmin } from '@/lib/supabase-admin';
+import { sanitizeProductInput, type ProductInput } from '@/lib/product-input';
 
 const NEW_WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
-
-type ProductInput = {
-  title?: string;
-  author_name?: string;
-  category?: string;
-  price?: number;
-  cost_price?: number;
-  promotional_price?: number;
-  description?: string;
-  cover_url?: string;
-  pages?: number;
-  year?: number;
-  rating?: number;
-  isNew?: boolean;
-  featured?: boolean;
-  stock?: number;
-  isbn?: string;
-  publisher?: string;
-  language?: string;
-  sku?: string;
-  binding?: string;
-  edition?: string;
-  tags?: string[];
-  status?: string;
-};
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireAdmin();
@@ -36,11 +12,18 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
   try {
     const body = (await req.json()) as ProductInput;
-    const { isNew, ...rest } = body;
+    const sanitized = sanitizeProductInput(body);
+    if ('error' in sanitized) {
+      return NextResponse.json({ error: sanitized.error }, { status: 400 });
+    }
+    const { isNew, ...rest } = sanitized.value;
 
     const update: Record<string, unknown> = { ...rest };
     if (isNew !== undefined) {
       update.new_until = isNew ? new Date(Date.now() + NEW_WINDOW_MS).toISOString() : null;
+    }
+    if (Object.keys(update).length === 0) {
+      return NextResponse.json({ error: 'Nada para actualizar.' }, { status: 400 });
     }
 
     const { data, error } = await supabaseAdmin

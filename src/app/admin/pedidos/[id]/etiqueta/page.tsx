@@ -33,8 +33,8 @@ export default async function EtiquetaEnvioPage({ params }: { params: Promise<{ 
 
         <div className="space-y-3 text-lg text-gray-800">
           <p>{order.shipping_address}</p>
-          {(order.province || order.postal_code) && (
-            <p>{[order.province, order.postal_code && `CP ${order.postal_code}`].filter(Boolean).join(' — ')}</p>
+          {(order.city || order.province || order.postal_code) && (
+            <p>{[order.city, order.province, order.postal_code && `CP ${order.postal_code}`].filter(Boolean).join(' — ')}</p>
           )}
           {order.customer_phone && <p>Tel: {order.customer_phone}</p>}
         </div>

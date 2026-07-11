@@ -1,6 +1,7 @@
 'use client';
 
 import { createContext, useContext, useCallback, type ReactNode } from 'react';
+import { invalidateAdminStats } from './AdminStatsContext';
 
 type OrderItem = { title: string; author_name: string; price: number; quantity: number };
 
@@ -11,6 +12,7 @@ export type AdminOrder = {
   customer_email: string;
   customer_phone?: string;
   shipping_address: string;
+  city?: string | null;
   province?: string | null;
   postal_code?: string | null;
   address_reference?: string | null;
@@ -96,6 +98,7 @@ export function AdminOrdersProvider({ children }: { children: ReactNode }) {
     if (res.ok) {
       if (cache.all) cache = { ...cache, all: { ...cache.all, data: cache.all.data.map(o => o.id === id ? { ...o, shipped: true } : o) } };
       if (cache.dispatch) cache = { ...cache, dispatch: { ...cache.dispatch, data: cache.dispatch.data.filter(o => o.id !== id), total: cache.dispatch.total - 1 } };
+      invalidateAdminStats();
     }
     return res.ok;
   }, []);
@@ -110,6 +113,7 @@ export function AdminOrdersProvider({ children }: { children: ReactNode }) {
       const apply = (list: AdminOrder[]) => list.map(o => o.id === id ? { ...o, status } : o);
       if (cache.all) cache = { ...cache, all: { ...cache.all, data: apply(cache.all.data) } };
       if (cache.dispatch) cache = { ...cache, dispatch: { ...cache.dispatch, data: apply(cache.dispatch.data) } };
+      invalidateAdminStats();
     }
     return res.ok;
   }, []);
@@ -125,6 +129,7 @@ export function AdminOrdersProvider({ children }: { children: ReactNode }) {
       )
     );
     cache = { all: null, dispatch: null };
+    invalidateAdminStats();
     return results.every(Boolean);
   }, []);
 
@@ -139,6 +144,7 @@ export function AdminOrdersProvider({ children }: { children: ReactNode }) {
       )
     );
     cache = { all: null, dispatch: null };
+    invalidateAdminStats();
     return results.every(Boolean);
   }, []);
 

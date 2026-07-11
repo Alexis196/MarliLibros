@@ -890,94 +890,6 @@ function AboutMarli() {
   );
 }
 
-// ─── Newsletter ───────────────────────────────────────────────────────────────
-
-function Newsletter() {
-  const [email, setEmail] = useState('');
-  const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
-  const [message, setMessage] = useState('');
-  const ref = useRef<HTMLElement>(null);
-  useFadeUp(ref);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (status === 'loading') return;
-    setStatus('loading');
-    try {
-      const res = await fetch('/api/newsletter/subscribe', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email }),
-      });
-      const data = await res.json();
-      if (data.success) {
-        setStatus('success');
-        setEmail('');
-      } else {
-        setStatus('error');
-        setMessage(data.message ?? 'No pudimos procesar la suscripción.');
-      }
-    } catch {
-      setStatus('error');
-      setMessage('No pudimos procesar la suscripción.');
-    }
-  };
-
-  return (
-    <section
-      ref={ref}
-      className="py-16 sm:py-20 text-center"
-      style={{
-        opacity: 0,
-        transform: 'translateY(24px)',
-        transition: 'opacity 0.6s ease, transform 0.6s ease',
-        background: 'linear-gradient(135deg, #345457 0%, #587F82 100%)',
-      }}
-    >
-      <div className="max-w-lg mx-auto px-4 sm:px-6">
-        <span
-          className="inline-flex items-center gap-1.5 text-[11px] font-bold tracking-widest px-3 py-1 rounded border uppercase mb-6"
-          style={{ color: '#C8A86B', borderColor: 'rgba(234,215,181,0.5)', backgroundColor: 'rgba(234,215,181,0.1)' }}
-        >
-          ✦ Newsletter
-        </span>
-
-        <h3 className="text-xl sm:text-2xl font-bold text-white mb-3">
-          Lecturas, ofertas y novedades
-        </h3>
-        <p className="text-white/60 text-[14px] mb-8">
-          Sin spam. Solo lo que vale la pena leer.
-        </p>
-
-        {status === 'success' ? (
-          <p className="text-[14px] font-semibold" style={{ color: '#C8A86B' }}>✓ ¡Listo! Ya estás suscripto.</p>
-        ) : (
-          <form onSubmit={handleSubmit} className="flex flex-col sm:flex-row gap-2 mb-2">
-            <input
-              type="email"
-              required
-              placeholder="tu@email.com"
-              className="flex-1 px-4 py-3 rounded-xl text-sm outline-none border text-white placeholder-white/40 focus:border-[#C8A86B] transition-colors"
-              style={{ backgroundColor: 'rgba(255,255,255,0.08)', borderColor: 'rgba(255,255,255,0.15)' }}
-              value={email}
-              onChange={e => setEmail(e.target.value)}
-            />
-            <button
-              type="submit"
-              disabled={status === 'loading'}
-              className="w-full sm:w-auto px-5 py-3 rounded-xl text-sm font-bold hover:opacity-90 transition-opacity whitespace-nowrap cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
-              style={{ backgroundColor: '#C8A86B', color: '#345457' }}
-            >
-              {status === 'loading' ? 'Enviando...' : 'Suscribirme'}
-            </button>
-          </form>
-        )}
-        {status === 'error' && <p className="text-[12px] text-red-200">{message}</p>}
-      </div>
-    </section>
-  );
-}
-
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function Home() {
@@ -995,7 +907,6 @@ export default function Home() {
       <Benefits />
       <FeaturedAuthors authors={authors} loading={loading} />
       <AboutMarli />
-      <Newsletter />
       <Footer />
     </main>
   );

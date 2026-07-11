@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useCart } from '@/contexts/CartContext';
 import { useFavorites } from '@/contexts/FavoritesContext';
 import { formatPrice } from '@/lib/format';
+import { effectivePrice, hasPromo } from '@/lib/pricing';
 
 export type Book = {
   id: string;
@@ -11,6 +12,8 @@ export type Book = {
   author_name: string;
   category: string;
   price: number;
+  promotional_price?: number | null;
+  status?: string;
   description?: string;
   cover_url?: string;
   new_until?: string;
@@ -114,7 +117,12 @@ export function BookCard({ book }: { book: Book }) {
         <p className="text-[9px] font-semibold uppercase tracking-wide mb-1" style={{ color: '#7A9C96' }}>{book.category}</p>
         {book.rating ? <RatingStars rating={book.rating} /> : null}
         <div className="flex items-center justify-between mt-1.5">
-          <span className="text-sm font-bold" style={{ color: '#345457' }}>{formatPrice(book.price)}</span>
+          <span className="text-sm font-bold" style={{ color: '#345457' }}>
+            {hasPromo(book) && (
+              <span className="text-[11px] font-normal text-gray-400 line-through mr-1.5">{formatPrice(book.price)}</span>
+            )}
+            {formatPrice(effectivePrice(book))}
+          </span>
           <button
             onClick={() => addItem(book)}
             disabled={outOfStock}

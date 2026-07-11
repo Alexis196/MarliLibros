@@ -14,6 +14,16 @@ const monthlyCache = new Map<number, Cached<MonthlyPoint[]>>();
 let annualCache: Cached<AnnualPoint[]> | null = null;
 const topSellersCache = new Map<string, Cached<TopSellersResult>>();
 
+// Los gastos y los pedidos se editan desde otros contextos (AdminExpensesContext,
+// AdminOrdersContext) que no saben nada de este caché de 10 minutos — sin esto,
+// agregar un gasto o aprobar un pedido no se reflejaba en el gráfico del dashboard
+// hasta que venciera el TTL o se recargara la página entera.
+export function invalidateAdminStats() {
+  monthlyCache.clear();
+  annualCache = null;
+  topSellersCache.clear();
+}
+
 type Ctx = {
   getMonthlyStats: (year: number) => Promise<MonthlyPoint[]>;
   getAnnualStats: () => Promise<AnnualPoint[]>;

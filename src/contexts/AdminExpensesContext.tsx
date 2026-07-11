@@ -1,6 +1,7 @@
 'use client';
 
 import { createContext, useContext, useCallback, type ReactNode } from 'react';
+import { invalidateAdminStats } from './AdminStatsContext';
 
 export type AdminExpense = {
   id: string;
@@ -98,11 +99,13 @@ export function AdminExpensesProvider({ children }: { children: ReactNode }) {
     });
     const data = await res.json();
     if (!res.ok) return { ok: false, error: (data.error as string) ?? 'Error al guardar.' };
+    invalidateAdminStats();
     return { ok: true, expense: data.expense as AdminExpense };
   }, []);
 
   const deleteExpense = useCallback(async (id: string): Promise<boolean> => {
     const res = await fetch(`/api/admin/expenses/${id}`, { method: 'DELETE' });
+    if (res.ok) invalidateAdminStats();
     return res.ok;
   }, []);
 
@@ -127,6 +130,7 @@ export function AdminExpensesProvider({ children }: { children: ReactNode }) {
     });
     const data = await res.json();
     if (!res.ok) return { ok: false, error: (data.error as string) ?? 'Error al duplicar.' };
+    invalidateAdminStats();
     return { ok: true, expense: data.expense as AdminExpense };
   }, []);
 

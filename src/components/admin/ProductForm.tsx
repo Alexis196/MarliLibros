@@ -373,27 +373,30 @@ export function ProductForm({ initialBook }: { initialBook?: Book }) {
     }
   };
 
+  // Campos vaciados van como null explícito: JSON.stringify elimina los undefined,
+  // así que con undefined un PATCH nunca podría limpiar un campo ya guardado
+  // (p. ej. quitar el precio promocional o volver el stock a "sin control").
   const buildPayload = () => ({
     title:             form.title,
     author_name:       form.author_name,
-    publisher:         form.publisher || undefined,
-    isbn:              form.isbn || undefined,
+    publisher:         form.publisher || null,
+    isbn:              form.isbn || null,
     category:          form.category,
-    language:          form.language || undefined,
+    language:          form.language || null,
     price:             Number(form.price),
-    cost_price:        form.cost_price ? Number(form.cost_price) : undefined,
-    promotional_price: form.promotional_price ? Number(form.promotional_price) : undefined,
-    stock:             form.stockUntracked ? undefined : (form.stock !== '' ? Number(form.stock) : undefined),
-    sku:               form.sku || undefined,
-    pages:             form.pages ? Number(form.pages) : undefined,
-    year:              form.year ? Number(form.year) : undefined,
-    edition:           form.edition || undefined,
-    binding:           form.binding || undefined,
-    rating:            form.rating > 0 ? form.rating : undefined,
-    description:       form.description || undefined,
+    cost_price:        form.cost_price ? Number(form.cost_price) : null,
+    promotional_price: form.promotional_price ? Number(form.promotional_price) : null,
+    stock:             form.stockUntracked ? null : (form.stock !== '' ? Number(form.stock) : null),
+    sku:               form.sku || null,
+    pages:             form.pages ? Number(form.pages) : null,
+    year:              form.year ? Number(form.year) : null,
+    edition:           form.edition || null,
+    binding:           form.binding || null,
+    rating:            form.rating > 0 ? form.rating : null,
+    description:       form.description || null,
     isNew:             form.isNew,
     featured:          form.featured,
-    tags:              form.tags.length > 0 ? form.tags : undefined,
+    tags:              form.tags,
     status:            form.status,
   });
 
@@ -402,6 +405,9 @@ export function ProductForm({ initialBook }: { initialBook?: Book }) {
     if (!form.title.trim())       newErrors.title       = 'El título es obligatorio';
     if (!form.author_name.trim()) newErrors.author_name = 'El autor es obligatorio';
     if (!form.price || isNaN(Number(form.price)) || Number(form.price) < 0) newErrors.price = 'El precio debe ser 0 o mayor';
+    if (form.promotional_price && Number(form.promotional_price) >= Number(form.price)) {
+      newErrors.promotional_price = 'El precio promocional debe ser menor al precio de venta';
+    }
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -555,8 +561,8 @@ export function ProductForm({ initialBook }: { initialBook?: Book }) {
                 <input type="number" min="0" step="1" value={form.cost_price} onChange={upStr('cost_price')} className={inputCls} placeholder="0" />
                 {margin !== null && <p className="text-[11px] mt-1" style={{ color: margin > 40 ? '#3D8A5C' : margin > 15 ? '#9A7840' : '#B85C5C' }}>Margen: {margin}%</p>}
               </Field>
-              <Field label="Precio promocional (ARS)">
-                <input type="number" min="0" step="1" value={form.promotional_price} onChange={upStr('promotional_price')} className={inputCls} placeholder="Vacío = sin promoción" />
+              <Field label="Precio promocional (ARS)" error={errors.promotional_price}>
+                <input type="number" min="0" step="1" value={form.promotional_price} onChange={upStr('promotional_price')} className={errors.promotional_price ? errorInputCls : inputCls} placeholder="Vacío = sin promoción" />
               </Field>
               <Field label="SKU / Código interno">
                 <input value={form.sku} onChange={upStr('sku')} className={inputCls} placeholder="Ej: LIB-0042" />

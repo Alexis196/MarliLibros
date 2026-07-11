@@ -1,0 +1,469 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Marli Libros — Loader</title>
+<style>
+
+  /* ============================================================================
+     MARLI LIBROS — LOADER
+     Un libro abierto cuya página se despega, se flexiona como papel real y se
+     asienta del otro lado. SVG puro + CSS. Cero JavaScript, cero librerías.
+
+     CÓMO FUNCIONA (la idea central, distinta de "rotar una tarjeta"):
+
+     1. La curvatura de la hoja NO se simula con scaleX/skew sobre una forma
+        rígida. Se anima directamente la geometría del <path> — el atributo
+        `d` — vía CSS @keyframes. El navegador interpola las curvas Bézier
+        cuadro a cuadro, así que la hoja realmente CAMBIA DE FORMA (se pandea
+        en "S", como un papel real), no solo rota.
+
+     2. El giro en sí (que pase de la derecha a la izquierda) es un rotateY()
+        3D genuino con perspective(), NO un scaleX fingiendo compresión. El
+        escorzo (que se vea "angosta" al pasar de canto) sale gratis de la
+        proyección en perspectiva real — no hay que fingirlo con otro truco.
+
+     3. Una sola forma base animada (dentro de <defs>) se referencia 4 veces
+        con <use>: sombra proyectada, filo de papel, dorso (verso) y frente
+        (recto). Cada instancia tiene su propia animación de opacidad/luz,
+        pero las 4 comparten exactamente la misma curvatura y el mismo giro
+        — así que se mueven pegadas, como capas del mismo papel.
+
+     4. El pivote de giro es un punto FIJO en el espacio del viewBox
+        (transform-box: view-box + transform-origin en px), no relativo al
+        bounding box de la forma — porque el bounding box cambia de tamaño
+        en cada cuadro (la hoja se curva), y un origen relativo a esa caja
+        "caminaría" en vez de quedarse clavado en el lomo del libro.
+
+     5. El "rebote" al asentarse es una sobre-rotación real (pasa de -180°,
+        llega a -186°, vuelve a -180°) con un cubic-bezier de resorte
+        (`cubic-bezier(.3,1.6,.5,1)`) puesto directamente en ese tramo del
+        keyframe — no un truco aparte, es la curva de aceleración misma.
+
+     Índice:
+       1. Fondo de demo (solo para previsualizar este archivo)
+       2. Contenedor del loader
+       3. Ambiente — luz suave y sombra de piso
+       4. Pila de páginas estáticas (5 a la izquierda + 5 a la derecha = 10)
+       5. Lomo del libro
+       6. La hoja que gira — forma base animada + sus 4 capas
+       7. Keyframes de la hoja (geometría, giro, luz, opacidad de caras)
+       8. Destellos — 6 instancias, cada una con su propio timing
+       9. prefers-reduced-motion
+     ============================================================================ */
+
+  /* 1. Fondo de demo -------------------------------------------------------- */
+  :root {
+    color-scheme: light dark;
+    --demo-bg: #F7F9F8;
+    --demo-ink: #345457;
+    --demo-ink-soft: #7A8C8A;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --demo-bg: #182726; --demo-ink: #E7EEEC; --demo-ink-soft: #93A6A3; }
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    height: 100%;
+    margin: 0;
+    background: var(--demo-bg);
+    display: grid;
+    place-items: center;
+  }
+  .demo-stage { display: flex; flex-direction: column; align-items: center; gap: 22px; }
+  .demo-caption {
+    margin: 0;
+    font-size: 13px;
+    font-style: italic;
+    letter-spacing: .01em;
+    color: var(--demo-ink-soft);
+    font-family: ui-serif, Georgia, "Times New Roman", serif;
+  }
+
+  /* 2. Contenedor del loader ------------------------------------------------- */
+  .marli-loader {
+    --marli-duration: 1.8s;
+    --marli-ease: cubic-bezier(.37, 0, .63, 1); /* ease-in-out físico: lento-rápido-lento */
+    width: 100%;
+    max-width: 260px;
+    aspect-ratio: 320 / 224;
+    background: transparent;
+  }
+  .marli-loader svg { display: block; width: 100%; height: 100%; overflow: visible; }
+
+  /* Pivote de giro: fijo en coordenadas del viewBox (160,112 = centro del lomo).
+     view-box en vez de fill-box porque el bounding box de la hoja cambia de
+     tamaño en cada cuadro al flexionarse — un origen relativo a esa caja
+     "caminaría"; uno relativo al viewBox se queda clavado en el lomo. */
+  .marli-loader .leaf-shadow,
+  .marli-loader .leaf-edge,
+  .marli-loader .leaf-edge-wrap,
+  .marli-loader .leaf-recto-group,
+  .marli-loader .leaf-verso-group {
+    transform-box: view-box;
+    transform-origin: 160px 112px;
+  }
+
+  /* 3. Ambiente — luz suave y sombra de piso --------------------------------- */
+  .marli-loader .ambient-light { fill: url(#marliAmbientGrad); opacity: .5; }
+  .marli-loader .ground-shadow { fill: #14262a; opacity: .12; filter: blur(4.5px); }
+
+  /* 4. Pila de páginas estáticas ---------------------------------------------
+     10 hojas fijas (5 + 5), en abanico, cada una un poco más recogida y un
+     poco más opaca que la anterior — así se lee espesor real, no dos hojas
+     sueltas. La de más arriba de cada lado calza exacto con el reposo/
+     aterrizaje de la hoja animada. */
+  .marli-loader .stack-sheet { stroke-width: 1; }
+  .marli-loader .gutter-shadow { opacity: .55; }
+
+  /* 5. Lomo -------------------------------------------------------------------*/
+  .marli-loader .spine { fill: url(#marliSpineGrad); stroke: rgba(30, 49, 52, .28); stroke-width: 1; }
+  .marli-loader .spine-ridge { stroke: rgba(30, 49, 52, .16); stroke-width: .8; stroke-linecap: round; }
+
+  /* 6. La hoja que gira --------------------------------------------------------
+     `leaf-base-d` vive en <defs>: nunca se pinta directamente, solo existe
+     para que las 4 capas la referencien con <use> y hereden su geometría
+     animada en vivo. */
+  .marli-loader .leaf-base-d {
+    animation: marliLeafD var(--marli-duration) var(--marli-ease) infinite;
+  }
+  .marli-loader .leaf-shadow {
+    fill: #16292b;
+    filter: blur(3.5px);
+    animation:
+      marliLeafTurn var(--marli-duration) var(--marli-ease) infinite,
+      marliCastShadow var(--marli-duration) var(--marli-ease) infinite;
+  }
+  .marli-loader .leaf-edge-wrap {
+    transform: scale(1.018); /* asoma un pelo más allá del recto/verso: lee como el canto del papel */
+    animation: none;
+  }
+  .marli-loader .leaf-edge {
+    fill: #E7DCC0;
+    animation:
+      marliLeafTurn var(--marli-duration) var(--marli-ease) infinite,
+      marliEdgeSliver var(--marli-duration) var(--marli-ease) infinite;
+  }
+  /* Frente y dorso son grupos (forma + líneas de "texto") para que ambos se
+     muevan pegados como una sola hoja — si las líneas quedaran sueltas en
+     el SVG, se quedarían fijas mientras la hoja gira. */
+  .marli-loader .leaf-verso-group {
+    animation:
+      marliLeafTurn var(--marli-duration) var(--marli-ease) infinite,
+      marliVersoOpacity var(--marli-duration) linear infinite;
+  }
+  .marli-loader .leaf-verso-shape { fill: url(#marliPageGradBack); stroke: rgba(30, 49, 52, .3); stroke-width: 1.1; }
+
+  .marli-loader .leaf-recto-group {
+    animation:
+      marliLeafTurn var(--marli-duration) var(--marli-ease) infinite,
+      marliRectoOpacity var(--marli-duration) linear infinite,
+      marliLeafLight var(--marli-duration) var(--marli-ease) infinite;
+  }
+  .marli-loader .leaf-recto-shape { fill: url(#marliPageGradFront); stroke: url(#marliEdgeGrad); stroke-width: 1.2; }
+
+  .marli-loader .leaf-hint { stroke: rgba(30, 49, 52, .14); stroke-width: .7; }
+
+  /* 7. Keyframes de la hoja -----------------------------------------------------
+     Los 12 cortes (0, 5, 15, 28, 40, 50, 60, 72, 85, 93, 97, 100 %) son los
+     mismos en `marliLeafD` y `marliLeafTurn` para que la curvatura y el giro
+     avancen siempre de la mano. Los comandos del path (M L C C L Z) son
+     IDÉNTICOS en las 12 paradas — solo cambian las coordenadas — porque así
+     es como el navegador puede interpolar `d` cuadro a cuadro sin saltos.
+  ------------------------------------------------------------------------------ */
+
+  @keyframes marliLeafD {
+    0%, 100% {
+      d: path("M160,48 L256,46 C256,70 256,97 256,112 C256,127 256,154 256,178 L160,176 Z");
+    }
+    5%, 97% {
+      d: path("M160,48 L256,46 C255,70 254,97 253,112 C254,127 255,154 256,178 L160,176 Z");
+    }
+    15% {
+      d: path("M160,48 L256,46 C249,70 240,97 234,112 C240,127 249,154 256,178 L160,176 Z");
+    }
+    28% {
+      d: path("M160,48 L256,46 C236,70 207,97 190,112 C207,127 236,154 256,178 L160,176 Z");
+    }
+    40% {
+      d: path("M160,48 L256,46 C220,70 166,97 136,112 C166,127 220,154 256,178 L160,176 Z");
+    }
+    50% {
+      d: path("M160,48 L256,46 C208,70 136,97 96,112 C136,127 208,154 256,178 L160,176 Z");
+    }
+    60% {
+      d: path("M160,48 L256,46 C221,70 169,97 140,112 C169,127 221,154 256,178 L160,176 Z");
+    }
+    72% {
+      d: path("M160,48 L256,46 C237,70 208,97 192,112 C208,127 237,154 256,178 L160,176 Z");
+    }
+    85% {
+      d: path("M160,48 L256,46 C250,70 241,97 236,112 C241,127 250,154 256,178 L160,176 Z");
+    }
+    93% {
+      d: path("M160,48 L256,46 C257,70 258,97 258,112 C258,127 257,154 256,178 L160,176 Z");
+    }
+  }
+
+  @keyframes marliLeafTurn {
+    0%        { transform: perspective(820px) rotateY(0deg)    translateY(0px); }
+    5%        { transform: perspective(820px) rotateY(-3deg)   translateY(-.3px); }
+    15%       { transform: perspective(820px) rotateY(-14deg)  translateY(-1.5px); }
+    28%       { transform: perspective(820px) rotateY(-34deg)  translateY(-4px); }
+    40%       { transform: perspective(820px) rotateY(-60deg)  translateY(-7px); }
+    50%       { transform: perspective(820px) rotateY(-90deg)  translateY(-9px); }
+    60%       { transform: perspective(820px) rotateY(-120deg) translateY(-7px); }
+    72%       { transform: perspective(820px) rotateY(-146deg) translateY(-4px); }
+    85%       { transform: perspective(820px) rotateY(-168deg) translateY(-1.2px); }
+    93%       { transform: perspective(820px) rotateY(-181deg) translateY(-.2px); }
+    /* Rebote: se pasa de -180° y vuelve — un resorte real, no un adorno aparte */
+    97%       { transform: perspective(820px) rotateY(-186deg) translateY(.3px);
+                animation-timing-function: cubic-bezier(.3, 1.6, .5, 1); }
+    100%      { transform: perspective(820px) rotateY(-180deg) translateY(0px);
+                animation-timing-function: cubic-bezier(.22, 1, .36, 1); }
+  }
+
+  /* Luz: se apaga un poco justo al pasar de canto (menos superficie mirando
+     a la fuente de luz), vuelve a brillar al asentarse — igual que papel real. */
+  @keyframes marliLeafLight {
+    0%, 100% { filter: brightness(1)    saturate(1)   drop-shadow(0 3px 5px rgba(20,38,42,.18)); }
+    15%      { filter: brightness(.98)  saturate(.98) drop-shadow(0 3px 5px rgba(20,38,42,.16)); }
+    40%      { filter: brightness(.92)  saturate(.94) drop-shadow(0 1px 2px rgba(20,38,42,.1)); }
+    50%      { filter: brightness(.87)  saturate(.9)  drop-shadow(0 0px 1px rgba(20,38,42,.06)); }
+    60%      { filter: brightness(.92)  saturate(.94) drop-shadow(0 1px 2px rgba(20,38,42,.1)); }
+    85%      { filter: brightness(.98)  saturate(.98) drop-shadow(0 3px 5px rgba(20,38,42,.16)); }
+  }
+
+  /* Frente y dorso son dos caras DISTINTAS con crossfade en el punto exacto
+     donde la hoja pasa de canto — así se vende el espesor del papel: lo que
+     mirábamos de frente deja de verse y aparece la otra cara, no un mero giro. */
+  @keyframes marliRectoOpacity {
+    0%, 38%   { opacity: 1; }
+    47%       { opacity: .55; }
+    51%, 100% { opacity: 0; }
+  }
+  @keyframes marliVersoOpacity {
+    0%, 38%   { opacity: 0; }
+    47%       { opacity: .45; }
+    51%, 100% { opacity: 1; }
+  }
+
+  /* Sombra que la hoja levantada proyecta sobre el resto del libro */
+  @keyframes marliCastShadow {
+    0%, 100% { opacity: 0; }
+    8%        { opacity: .06; }
+    25%       { opacity: .2; }
+    50%       { opacity: .28; }
+    75%       { opacity: .2; }
+    92%       { opacity: .05; }
+  }
+
+  /* El filo de papel solo se asoma cuando la hoja está de canto */
+  @keyframes marliEdgeSliver {
+    0%, 100% { opacity: 0; }
+    30%       { opacity: .1; }
+    50%       { opacity: .55; }
+    70%       { opacity: .1; }
+  }
+
+  /* 8. Destellos ------------------------------------------------------------
+     6 instancias del mismo path (✦), pero cada una con su PROPIO keyframes:
+     aparecen en instantes distintos (no todas "una atrás de otra" de forma
+     pareja), escalan y rotan distinto, y usan curvas de aceleración
+     distintas — para que no se lean como una sola animación clonada 6 veces.
+  ---------------------------------------------------------------------------- */
+  .marli-loader .spark {
+    transform-box: fill-box;
+    transform-origin: 50% 50%;
+    fill: #C8A86B;
+    opacity: 0;
+    animation-duration: var(--marli-duration);
+    animation-iteration-count: infinite;
+  }
+  .marli-loader .spark-1 { animation-name: marliSpark1; animation-timing-function: cubic-bezier(.2, 1.4, .4, 1); }
+  .marli-loader .spark-2 { animation-name: marliSpark2; animation-timing-function: cubic-bezier(.34, 1.56, .64, 1); }
+  .marli-loader .spark-3 { animation-name: marliSpark3; animation-timing-function: ease-out; }
+  .marli-loader .spark-4 { animation-name: marliSpark4; animation-timing-function: cubic-bezier(.2, 1.4, .4, 1); }
+  .marli-loader .spark-5 { animation-name: marliSpark5; animation-timing-function: ease-out; }
+  .marli-loader .spark-6 { animation-name: marliSpark6; animation-timing-function: cubic-bezier(.34, 1.56, .64, 1); }
+
+  @keyframes marliSpark1 {
+    0%, 84%   { opacity: 0; transform: scale(0)     rotate(0deg); }
+    88%       { opacity: 1; transform: scale(1.25)  rotate(12deg); }
+    92%       { opacity: 1; transform: scale(1)     rotate(6deg); }
+    97%, 100% { opacity: 0; transform: scale(.5)    rotate(2deg); }
+  }
+  @keyframes marliSpark2 {
+    0%, 87%   { opacity: 0; transform: scale(0)     rotate(0deg); }
+    90%       { opacity: 1; transform: scale(1.15)  rotate(-10deg); }
+    94%       { opacity: .9; transform: scale(.95)  rotate(-4deg); }
+    99%, 100% { opacity: 0; transform: scale(.4)    rotate(-2deg); }
+  }
+  @keyframes marliSpark3 {
+    0%, 89%   { opacity: 0; transform: scale(0)     rotate(0deg); }
+    92%       { opacity: 1; transform: scale(1.35)  rotate(14deg); }
+    96%       { opacity: 1; transform: scale(1.05)  rotate(7deg); }
+    100%      { opacity: 0; transform: scale(.45)   rotate(3deg); }
+  }
+  @keyframes marliSpark4 {
+    0%, 82%   { opacity: 0; transform: scale(0)     rotate(0deg); }
+    86%       { opacity: 1; transform: scale(1.1)   rotate(-8deg); }
+    90%       { opacity: .85; transform: scale(.9)  rotate(-3deg); }
+    95%, 100% { opacity: 0; transform: scale(.4)    rotate(-1deg); }
+  }
+  @keyframes marliSpark5 {
+    0%, 88%   { opacity: 0; transform: scale(0)     rotate(0deg); }
+    91%       { opacity: 1; transform: scale(1.2)   rotate(9deg); }
+    95%       { opacity: .9; transform: scale(1)    rotate(4deg); }
+    99.5%, 100% { opacity: 0; transform: scale(.4)  rotate(1deg); }
+  }
+  @keyframes marliSpark6 {
+    0%, 90%   { opacity: 0; transform: scale(0)     rotate(0deg); }
+    93%       { opacity: 1; transform: scale(1.3)   rotate(-13deg); }
+    96%       { opacity: 1; transform: scale(1.02)  rotate(-6deg); }
+    100%      { opacity: 0; transform: scale(.5)    rotate(-2deg); }
+  }
+
+  /* 9. Accesibilidad: menos movimiento ---------------------------------------- */
+  @media (prefers-reduced-motion: reduce) {
+    .marli-loader * { animation-duration: 3.6s !important; }
+  }
+</style>
+</head>
+<body>
+
+  <!-- ==============================================================
+       Todo lo de afuera de .marli-loader es solo para previsualizar
+       este archivo al abrirlo. El loader en sí no trae fondo propio.
+     ============================================================== -->
+  <div class="demo-stage">
+
+    <div class="marli-loader" role="img" aria-label="Cargando">
+      <svg viewBox="0 0 320 224" preserveAspectRatio="xMidYMid meet" shape-rendering="geometricPrecision">
+        <defs>
+          <!-- Forma base: nunca se pinta sola, solo alimenta los <use> de abajo -->
+          <path id="marliLeafBase" class="leaf-base-d"
+                d="M160,48 L256,46 C256,70 256,97 256,112 C256,127 256,154 256,178 L160,176 Z" />
+
+          <path id="marliSparkShape"
+                d="M0,-7 C1.2,-1.2 1.2,-1.2 7,0 C1.2,1.2 1.2,1.2 0,7 C-1.2,1.2 -1.2,1.2 -7,0 C-1.2,-1.2 -1.2,-1.2 0,-7 Z" />
+
+          <linearGradient id="marliPageGradFront" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%"   stop-color="#ffffff" />
+            <stop offset="55%"  stop-color="#fbfaf7" />
+            <stop offset="100%" stop-color="#f1efe9" />
+          </linearGradient>
+
+          <linearGradient id="marliPageGradBack" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%"   stop-color="#f2efe6" />
+            <stop offset="55%"  stop-color="#eae5d8" />
+            <stop offset="100%" stop-color="#e3ddcc" />
+          </linearGradient>
+
+          <linearGradient id="marliEdgeGrad" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%"   stop-color="#345457" stop-opacity=".45" />
+            <stop offset="100%" stop-color="#C8A86B" stop-opacity=".55" />
+          </linearGradient>
+
+          <linearGradient id="marliSpineGrad" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%"   stop-color="#eef2f1" />
+            <stop offset="45%"  stop-color="#c9d3d2" />
+            <stop offset="55%"  stop-color="#c9d3d2" />
+            <stop offset="100%" stop-color="#eef2f1" />
+          </linearGradient>
+
+          <linearGradient id="marliGutterRightGrad" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%"   stop-color="#14262a" stop-opacity=".28" />
+            <stop offset="100%" stop-color="#14262a" stop-opacity="0" />
+          </linearGradient>
+          <linearGradient id="marliGutterLeftGrad" x1="1" y1="0" x2="0" y2="0">
+            <stop offset="0%"   stop-color="#14262a" stop-opacity=".28" />
+            <stop offset="100%" stop-color="#14262a" stop-opacity="0" />
+          </linearGradient>
+
+          <radialGradient id="marliAmbientGrad" cx="50%" cy="20%" r="65%">
+            <stop offset="0%"   stop-color="#ffffff" stop-opacity=".9" />
+            <stop offset="100%" stop-color="#ffffff" stop-opacity="0" />
+          </radialGradient>
+        </defs>
+
+        <!-- 3. Ambiente -->
+        <ellipse class="ambient-light" cx="160" cy="30" rx="150" ry="60" />
+        <ellipse class="ground-shadow" cx="160" cy="199" rx="120" ry="9" />
+
+        <!-- 4. Pila estática izquierda (5 hojas, de la más recogida a la de arriba) -->
+        <path class="stack-sheet" fill="#e0dccc" stroke="rgba(30,49,52,.16)"
+              d="M160,52 L76,50 C76,73 89,96 110,112 C89,129 76,151 76,174 L160,172 Z" />
+        <path class="stack-sheet" fill="#e8e4d7" stroke="rgba(30,49,52,.19)"
+              d="M160,51 L73,49 C73,72 82,96 96,112 C82,128 73,152 73,175 L160,173 Z" />
+        <path class="stack-sheet" fill="#efece2" stroke="rgba(30,49,52,.22)"
+              d="M160,50 L70,48 C70,71 76,96 84,112 C76,128 70,153 70,176 L160,174 Z" />
+        <path class="stack-sheet" fill="#f7f5ef" stroke="rgba(30,49,52,.26)"
+              d="M160,49 L67,47 C67,70 70,96 74,112 C70,128 67,154 67,177 L160,175 Z" />
+        <path class="stack-sheet" fill="#ffffff" stroke="rgba(30,49,52,.3)"
+              d="M160,48 L64,46 C64,70 64,97 64,112 C64,127 64,154 64,178 L160,176 Z" />
+        <path class="book-hairline" d="M78,60 Q66,112 78,164" fill="none" stroke="rgba(30,49,52,.16)" stroke-width=".8" opacity=".7" />
+
+        <!-- 4. Pila estática derecha (idéntica en espejo) -->
+        <path class="stack-sheet" fill="#e0dccc" stroke="rgba(30,49,52,.16)"
+              d="M160,52 L244,50 C244,73 231,96 210,112 C231,129 244,151 244,174 L160,172 Z" />
+        <path class="stack-sheet" fill="#e8e4d7" stroke="rgba(30,49,52,.19)"
+              d="M160,51 L247,49 C247,72 238,96 224,112 C238,128 247,152 247,175 L160,173 Z" />
+        <path class="stack-sheet" fill="#efece2" stroke="rgba(30,49,52,.22)"
+              d="M160,50 L250,48 C250,71 244,96 236,112 C244,128 250,153 250,176 L160,174 Z" />
+        <path class="stack-sheet" fill="#f7f5ef" stroke="rgba(30,49,52,.26)"
+              d="M160,49 L253,47 C253,70 250,96 246,112 C250,128 253,154 253,177 L160,175 Z" />
+        <path class="stack-sheet" fill="#ffffff" stroke="rgba(30,49,52,.3)"
+              d="M160,48 L256,46 C256,70 256,97 256,112 C256,127 256,154 256,178 L160,176 Z" />
+        <path class="book-hairline" d="M242,60 Q254,112 242,164" fill="none" stroke="rgba(30,49,52,.16)" stroke-width=".8" opacity=".7" />
+
+        <!-- Sombra de la unión (gutter) sobre ambas pilas, antes del lomo -->
+        <rect class="gutter-shadow" x="120" y="46" width="32" height="132" fill="url(#marliGutterLeftGrad)" />
+        <rect class="gutter-shadow" x="168" y="46" width="32" height="132" fill="url(#marliGutterRightGrad)" />
+
+        <!-- 5. Lomo -->
+        <path class="spine"
+              d="M151,48 Q151,43 156,43 L164,43 Q169,43 169,48 L169,176 Q169,181 164,181 L156,181 Q151,181 151,176 Z" />
+        <line class="spine-ridge" x1="155" y1="70"  x2="165" y2="70" />
+        <line class="spine-ridge" x1="155" y1="112" x2="165" y2="112" />
+        <line class="spine-ridge" x1="155" y1="154" x2="165" y2="154" />
+
+        <!-- 6. La hoja que gira: sombra proyectada → filo de papel → dorso → frente
+             Los "hint" son líneas finísimas sugiriendo texto impreso — puramente
+             decorativas, agrupadas con su cara para que giren pegadas a ella. -->
+        <use class="leaf-shadow" href="#marliLeafBase" />
+
+        <g class="leaf-edge-wrap">
+          <use class="leaf-edge" href="#marliLeafBase" />
+        </g>
+
+        <g class="leaf-verso-group">
+          <use class="leaf-verso-shape" href="#marliLeafBase" />
+          <path class="leaf-hint" fill="none" d="M170,64 L232,62" opacity=".5" />
+          <path class="leaf-hint" fill="none" d="M170,74 L224,72" opacity=".4" />
+          <path class="leaf-hint" fill="none" d="M170,84 L228,82" opacity=".4" />
+        </g>
+
+        <g class="leaf-recto-group">
+          <use class="leaf-recto-shape" href="#marliLeafBase" />
+          <path class="leaf-hint" fill="none" d="M172,62 L234,60" opacity=".45" />
+          <path class="leaf-hint" fill="none" d="M172,72 L226,70" opacity=".35" />
+          <path class="leaf-hint" fill="none" d="M172,82 L230,80" opacity=".35" />
+        </g>
+
+        <!-- 8. Destellos -->
+        <use class="spark spark-1" href="#marliSparkShape" x="150" y="20" />
+        <use class="spark spark-2" href="#marliSparkShape" x="180" y="14" />
+        <use class="spark spark-3" href="#marliSparkShape" x="204" y="26" />
+        <use class="spark spark-4" href="#marliSparkShape" x="128" y="30" />
+        <use class="spark spark-5" href="#marliSparkShape" x="168" y="34" />
+        <use class="spark spark-6" href="#marliSparkShape" x="192" y="42" />
+      </svg>
+    </div>
+
+    <p class="demo-caption">Cargando tu próxima historia…</p>
+  </div>
+
+</body>
+</html>

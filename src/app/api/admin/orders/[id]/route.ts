@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAdmin } from '@/lib/admin-auth';
 import { supabaseAdmin } from '@/lib/supabase-admin';
+import { finalizeApprovedOrder } from '@/lib/order-fulfillment';
 
 const ALLOWED_STATUSES = ['pending', 'in_process', 'approved', 'rejected', 'cancelled'];
 
@@ -39,5 +40,13 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   if (error || !data) {
     return NextResponse.json({ error: 'No pudimos actualizar el pedido.' }, { status: 500 });
   }
+
+  // Aprobar desde el admin (pago por transferencia, acuerdo por WhatsApp, etc.) dispara
+  // el mismo cierre que un pago online: email de confirmación, descuento de stock y
+  // conteo de cupón. finalizeApprovedOrder es idempotente, así que repetir no duplica nada.
+  if (update.status === 'approved') {
+    await finalizeApprovedOrder(id);
+  }
+
   return NextResponse.json({ order: data });
 }

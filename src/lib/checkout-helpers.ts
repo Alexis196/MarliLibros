@@ -1,7 +1,12 @@
 import { supabaseAdmin } from './supabase-admin';
 import { validateCoupon } from './coupons';
+import { effectivePrice } from './pricing';
 
 export type CartItemInput = { bookId: string; quantity: number };
+
+const MAX_QUANTITY_PER_ITEM = 99;
+
+class StockError extends Error {}
 
 export type OrderLine = {
   book_id: string;
@@ -28,10 +33,18 @@ export async function resolveOrder(items: CartItemInput[], couponCode?: string):
     return { ok: false, error: 'El carrito está vacío.' };
   }
 
+  // Cantidades: enteros positivos siempre (una cantidad negativa o fraccionaria
+  // enviada a mano podría manipular el total).
+  for (const i of items) {
+    if (!Number.isInteger(i.quantity) || i.quantity < 1 || i.quantity > MAX_QUANTITY_PER_ITEM) {
+      return { ok: false, error: 'Cantidad inválida en el carrito.' };
+    }
+  }
+
   const bookIds = items.map(i => i.bookId);
   const { data: books, error: booksError } = await supabaseAdmin
     .from('books')
-    .select('id, title, author_name, price')
+    .select('id, title, author_name, price, promotional_price, stock, status')
     .in('id', bookIds);
 
   if (booksError || !books || books.length === 0) {
@@ -42,16 +55,24 @@ export async function resolveOrder(items: CartItemInput[], couponCode?: string):
   try {
     orderItems = items.map(i => {
       const book = books.find(b => b.id === i.bookId);
-      if (!book) throw new Error(`Libro no encontrado: ${i.bookId}`);
+      if (!book || book.status !== 'published') throw new Error(`Libro no disponible: ${i.bookId}`);
+      if (typeof book.stock === 'number' && book.stock < i.quantity) {
+        throw new StockError(
+          book.stock === 0
+            ? `"${book.title}" ya no tiene stock. Quitalo del carrito para continuar.`
+            : `De "${book.title}" quedan solo ${book.stock} unidades.`
+        );
+      }
       return {
         book_id: book.id as string,
         title: book.title as string,
         author_name: book.author_name as string,
-        price: Number(book.price),
+        price: effectivePrice({ price: Number(book.price), promotional_price: book.promotional_price != null ? Number(book.promotional_price) : null }),
         quantity: i.quantity,
       };
     });
-  } catch {
+  } catch (err) {
+    if (err instanceof StockError) return { ok: false, error: err.message };
     return { ok: false, error: 'Uno de los libros del carrito ya no está disponible.' };
   }
 

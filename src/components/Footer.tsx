@@ -4,7 +4,7 @@ import { CATEGORY_NAMES } from '@/lib/categories';
 
 function IconInstagram() {
   return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
       <rect width="20" height="20" x="2" y="2" rx="5" ry="5" />
       <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z" />
       <line x1="17.5" x2="17.51" y1="6.5" y2="6.5" />
@@ -12,17 +12,9 @@ function IconInstagram() {
   );
 }
 
-function IconFacebook() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z" />
-    </svg>
-  );
-}
-
 function IconWhatsApp() {
   return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
       <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
     </svg>
   );
@@ -53,11 +45,9 @@ function IconMercadoPago() {
   );
 }
 
-// TODO: completar con las URLs reales cuando existan las cuentas — mientras estén vacías, el ícono no se muestra.
 const SOCIAL_LINKS = {
-  instagram: '',
-  facebook: '',
-  whatsapp: '',
+  instagram: 'https://www.instagram.com/marlilibros/',
+  whatsapp: 'https://wa.me/5493704262031',
 };
 
 const PAYMENT_METHODS = [
@@ -66,6 +56,8 @@ const PAYMENT_METHODS = [
   { name: 'MercadoPago', Icon: IconMercadoPago },
 ];
 
+const FOOTER_CATEGORIES_LIMIT = 6;
+
 const FOOTER_LINKS: Record<string, { label: string; href: string }[]> = {
   Institucional: [
     { label: 'Nosotros', href: '/nosotros' },
@@ -73,9 +65,11 @@ const FOOTER_LINKS: Record<string, { label: string; href: string }[]> = {
     { label: 'Formas de pago', href: '/formas-de-pago' },
     { label: 'Envíos', href: '/envios' },
     { label: 'Cambios y devoluciones', href: '/terminos' },
-    { label: 'Contacto', href: '/contacto' },
   ],
-  Categorías: CATEGORY_NAMES.map(cat => ({ label: cat, href: `/catalogo?categoria=${encodeURIComponent(cat)}` })),
+  Categorías: [
+    ...CATEGORY_NAMES.slice(0, FOOTER_CATEGORIES_LIMIT).map(cat => ({ label: cat, href: `/catalogo?categoria=${encodeURIComponent(cat)}` })),
+    { label: 'Ver todas →', href: '/catalogo' },
+  ],
   Información: [
     { label: 'Términos y condiciones', href: '/terminos' },
     { label: 'Política de privacidad', href: '/privacidad' },
@@ -96,16 +90,31 @@ export function Footer() {
             <p className="text-[12px] text-white/55 leading-relaxed mb-5">
               Desde 1999 acompañamos tu pasión por la lectura con una cuidada selección de libros y productos para todas las edades.
             </p>
-            {(SOCIAL_LINKS.instagram || SOCIAL_LINKS.facebook || SOCIAL_LINKS.whatsapp) && (
-              <div className="flex gap-3 text-white/60">
-                {SOCIAL_LINKS.instagram && (
-                  <a href={SOCIAL_LINKS.instagram} target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors"><IconInstagram /></a>
-                )}
-                {SOCIAL_LINKS.facebook && (
-                  <a href={SOCIAL_LINKS.facebook} target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors"><IconFacebook /></a>
-                )}
+            {(SOCIAL_LINKS.whatsapp || SOCIAL_LINKS.instagram) && (
+              <div className="flex gap-2.5">
                 {SOCIAL_LINKS.whatsapp && (
-                  <a href={SOCIAL_LINKS.whatsapp} target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors"><IconWhatsApp /></a>
+                  <a
+                    href={SOCIAL_LINKS.whatsapp}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label="Escribinos por WhatsApp"
+                    className="flex items-center justify-center w-9 h-9 rounded-full hover:opacity-85 hover:-translate-y-0.5 transition-all duration-200"
+                    style={{ backgroundColor: '#25D366' }}
+                  >
+                    <IconWhatsApp />
+                  </a>
+                )}
+                {SOCIAL_LINKS.instagram && (
+                  <a
+                    href={SOCIAL_LINKS.instagram}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label="Seguinos en Instagram"
+                    className="flex items-center justify-center w-9 h-9 rounded-full hover:opacity-85 hover:-translate-y-0.5 transition-all duration-200"
+                    style={{ background: 'linear-gradient(45deg, #F58529, #DD2A7B, #8134AF, #515BD4)' }}
+                  >
+                    <IconInstagram />
+                  </a>
                 )}
               </div>
             )}

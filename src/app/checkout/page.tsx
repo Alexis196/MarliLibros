@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { initMercadoPago, CardPayment } from '@mercadopago/sdk-react';
 import { useCart } from '@/contexts/CartContext';
 import { TransactionalHeader, TransactionalFooter } from '@/components/TransactionalLayout';
+import { MarliLoader } from '@/components/MarliLoader';
 
 const MP_PUBLIC_KEY = process.env.NEXT_PUBLIC_MERCADOPAGO_PUBLIC_KEY;
 
@@ -50,6 +51,7 @@ export default function CheckoutPage() {
     email: '',
     phone: '',
     address: '',
+    city: '',
     province: '',
     postalCode: '',
     reference: '',
@@ -80,7 +82,7 @@ export default function CheckoutPage() {
       setForm(prev => ({ ...prev, [field]: e.target.value }));
 
   const missingShippingData = () =>
-    !form.name || !form.email || !form.address || !form.province || !form.postalCode || !form.reference;
+    !form.name || !form.email || !form.address || !form.city || !form.province || !form.postalCode || !form.reference;
 
   const applyCoupon = async () => {
     if (!couponInput.trim()) return;
@@ -176,9 +178,15 @@ export default function CheckoutPage() {
         setError(data.error || 'No pudimos procesar el pago.');
         throw new Error(data.error || 'payment-failed');
       }
+      if (data.status === 'rejected') {
+        // Mostramos el motivo acá mismo: el cliente corrige los datos o cambia de
+        // tarjeta sin perder el formulario ni el carrito.
+        setError(data.message || 'El pago fue rechazado. Probá con otra tarjeta.');
+        throw new Error('payment-rejected');
+      }
       redirectForStatus(data.status, data.order_id);
     } catch (err) {
-      if (!(err instanceof Error && err.message === 'missing-shipping-data')) {
+      if (!(err instanceof Error && (err.message === 'missing-shipping-data' || err.message === 'payment-rejected'))) {
         setError(prev => prev ?? 'No pudimos procesar el pago. Intentá de nuevo.');
       }
       throw err;
@@ -253,9 +261,20 @@ export default function CheckoutPage() {
                     <input
                       required
                       type="text"
-                      placeholder="Calle, número, ciudad"
+                      placeholder="Calle y número"
                       value={form.address}
                       onChange={update('address')}
+                      className="w-full rounded-xl border border-gray-200 px-3.5 py-2.5 text-sm outline-none transition-all duration-300 focus:border-[#345457] focus:shadow-[0_0_0_3px_rgba(52,84,87,0.08)]"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[12px] font-medium text-gray-500 mb-1.5">Barrio / Ciudad</label>
+                    <input
+                      required
+                      type="text"
+                      placeholder="Ej: Palermo, CABA"
+                      value={form.city}
+                      onChange={update('city')}
                       className="w-full rounded-xl border border-gray-200 px-3.5 py-2.5 text-sm outline-none transition-all duration-300 focus:border-[#345457] focus:shadow-[0_0_0_3px_rgba(52,84,87,0.08)]"
                     />
                   </div>
@@ -331,11 +350,16 @@ export default function CheckoutPage() {
                 {error && <p className="text-sm text-red-500 mb-4">{error}</p>}
 
                 {activeTab === 'card' ? (
-                  mpReady ? (
+                  !MP_PUBLIC_KEY ? (
+                    <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+                      <p className="text-sm text-amber-700">
+                        El pago con tarjeta no está disponible en este momento. Podés pagar con Mercado Pago desde la otra pestaña.
+                      </p>
+                    </div>
+                  ) : mpReady ? (
                     <CardPayment
                       key={finalTotal}
-                      initialization={{ amount: finalTotal }}
-                      locale="es-AR"
+                      initialization={{ amount: finalTotal, payer: { email: form.email || undefined } }}
                       onSubmit={handleCardSubmit}
                       onError={(err) => {
                         console.error('CardPayment brick error', err);
@@ -344,7 +368,7 @@ export default function CheckoutPage() {
                     />
                   ) : (
                     <div className="flex items-center justify-center py-10">
-                      <div className="w-6 h-6 rounded-full border-2 border-gray-200 border-t-[#345457] animate-spin" />
+                      <MarliLoader size={64} label="Cargando formulario de pago" />
                     </div>
                   )
                 ) : (

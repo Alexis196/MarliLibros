@@ -36,7 +36,7 @@ export function BooksProvider({ children }: { children: ReactNode }) {
   const getBook = useCallback(async (id: string): Promise<Book | null> => {
     const cached = singleCache.get(id);
     if (!isStale(cached)) return cached!.data;
-    const { data } = await supabase.from('books').select('*').eq('id', id).single();
+    const { data } = await supabase.from('books').select('*').eq('id', id).eq('status', 'published').maybeSingle();
     if (data) singleCache.set(id, { data: data as Book, fetchedAt: Date.now() });
     return (data as Book | null) ?? null;
   }, []);
@@ -54,7 +54,7 @@ export function BooksProvider({ children }: { children: ReactNode }) {
     }
 
     if (misses.length > 0) {
-      const { data } = await supabase.from('books').select('*').in('id', misses);
+      const { data } = await supabase.from('books').select('*').in('id', misses).eq('status', 'published');
       for (const b of (data ?? []) as Book[]) {
         singleCache.set(b.id, { data: b, fetchedAt: now });
         hits.push(b);
@@ -71,6 +71,7 @@ export function BooksProvider({ children }: { children: ReactNode }) {
     const { data } = await supabase
       .from('books')
       .select('*')
+      .eq('status', 'published')
       .eq('category', category)
       .neq('id', excludeId)
       .limit(6);
@@ -85,6 +86,7 @@ export function BooksProvider({ children }: { children: ReactNode }) {
     const { data } = await supabase
       .from('books')
       .select('*')
+      .eq('status', 'published')
       .eq('author_name', authorName)
       .order('created_at', { ascending: false });
     const books = (data ?? []) as Book[];

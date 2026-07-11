@@ -33,7 +33,7 @@ function initials(name: string) {
 }
 
 function exportToCSV(orders: AdminOrder[], filename: string) {
-  const headers = ['ID', 'Cliente', 'Email', 'Teléfono', 'Dirección', 'Provincia', 'CP', 'Total', 'Estado', 'Despachado', 'Fecha'];
+  const headers = ['ID', 'Cliente', 'Email', 'Teléfono', 'Dirección', 'Ciudad', 'Provincia', 'CP', 'Total', 'Estado', 'Despachado', 'Fecha'];
   const rows = orders.map(o => {
     const cfg = getStatusConfig(o.status, o.shipped);
     return [
@@ -42,6 +42,7 @@ function exportToCSV(orders: AdminOrder[], filename: string) {
       o.customer_email,
       o.customer_phone ?? '',
       o.shipping_address,
+      o.city ?? '',
       o.province ?? '',
       o.postal_code ?? '',
       String(o.total_amount),
@@ -206,8 +207,10 @@ function OrderRow({ order, isFirst, selected, onSelect, onOpenPanel, onApprove, 
           <p className="text-[11px] text-gray-400 truncate">{order.customer_email}</p>
         </div>
 
-        {/* Province */}
-        <span className="text-[12px] text-gray-500 truncate">{order.province ?? '—'}</span>
+        {/* Destino */}
+        <span className="text-[12px] text-gray-500 truncate">
+          {[order.city, order.province].filter(Boolean).join(', ') || '—'}
+        </span>
 
         {/* Items */}
         <span className={`text-[12px] ${itemCount > 5 ? 'font-semibold text-amber-600' : 'text-gray-500'}`}>
@@ -302,7 +305,9 @@ function OrderRow({ order, isFirst, selected, onSelect, onOpenPanel, onApprove, 
           <div className="flex items-center gap-2 mt-0.5 flex-wrap">
             <StatusBadge status={order.status} shipped={order.shipped} />
             <span className="text-[11px] text-gray-400">{formatRelative(order.created_at)}</span>
-            {order.province && <span className="text-[11px] text-gray-400">{order.province}</span>}
+            {(order.city || order.province) && (
+              <span className="text-[11px] text-gray-400">{[order.city, order.province].filter(Boolean).join(', ')}</span>
+            )}
           </div>
         </div>
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9AA6A4" strokeWidth="2">
@@ -432,9 +437,9 @@ function SidePanel({ order, onClose, onApprove, onShip, onReject, updatingId }: 
         <div>
           <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest mb-2">Envío</p>
           <p className="text-[13px] text-gray-700">{order.shipping_address}</p>
-          {(order.province || order.postal_code) && (
+          {(order.city || order.province || order.postal_code) && (
             <p className="text-[13px] text-gray-600 mt-0.5">
-              {[order.province, order.postal_code && `CP ${order.postal_code}`].filter(Boolean).join(' · ')}
+              {[order.city, order.province, order.postal_code && `CP ${order.postal_code}`].filter(Boolean).join(' · ')}
             </p>
           )}
           {order.address_reference && (

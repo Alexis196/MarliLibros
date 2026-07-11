@@ -88,7 +88,7 @@ export default function CatalogoPage() {
   }, [search]);
 
   const buildQuery = (from: number, to: number) => {
-    let q = supabase.from('books').select('*', { count: 'exact' });
+    let q = supabase.from('books').select('*', { count: 'exact' }).eq('status', 'published');
     if (showNovedades) q = q.gt('new_until', new Date().toISOString());
     if (selectedCategory) q = q.eq('category', selectedCategory);
     if (selectedAuthor) q = q.eq('author_name', selectedAuthor);

@@ -358,7 +358,8 @@ export default function AdminProductosPage() {
   const handleStockSave = async (id: string, val: number | null) => {
     setEditingStockId(null);
     setProducts(prev => prev.map(p => p.id === id ? { ...p, stock: val } : p));
-    await updateProduct(id, { stock: val ?? undefined });
+    // null explícito: undefined se pierde en JSON.stringify y el PATCH llegaría vacío
+    await updateProduct(id, { stock: val });
   };
 
   const handleDuplicate = async (id: string) => {

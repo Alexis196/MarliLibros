@@ -10,6 +10,7 @@ import { Navbar } from '@/components/Navbar';
 import { Footer } from '@/components/Footer';
 import { BookCard, type Book } from '@/components/BookCard';
 import { formatPrice } from '@/lib/format';
+import { effectivePrice, hasPromo } from '@/lib/pricing';
 
 type Review = {
   id: string;
@@ -230,7 +231,7 @@ export default function BookDetailPage({ params }: { params: Promise<{ id: strin
 
           {loading ? (
             <div className="grid grid-cols-1 md:grid-cols-[320px_1fr] gap-8 sm:gap-12">
-              <div className="max-w-[220px] sm:max-w-none mx-auto">
+              <div className="w-full max-w-[220px] sm:max-w-none mx-auto">
                 <div className="rounded-2xl animate-pulse" style={{ aspectRatio: '2/3', backgroundColor: '#E5ECE8' }} />
               </div>
               <div className="space-y-3">
@@ -250,7 +251,7 @@ export default function BookDetailPage({ params }: { params: Promise<{ id: strin
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-[320px_1fr] gap-8 sm:gap-12">
               {/* Portada */}
-              <div className="max-w-[220px] sm:max-w-none mx-auto">
+              <div className="w-full max-w-[220px] sm:max-w-none mx-auto">
               <div className="relative rounded-2xl overflow-hidden bg-white border border-black/5" style={{ aspectRatio: '2/3', boxShadow: '0 8px 24px rgba(52,84,87,0.08)' }}>
                 {book.cover_url ? (
                   <img src={book.cover_url} alt={book.title} className="absolute inset-0 w-full h-full object-cover" />
@@ -292,7 +293,19 @@ export default function BookDetailPage({ params }: { params: Promise<{ id: strin
                   </div>
                 )}
 
-                <p className="text-2xl font-bold mt-6" style={{ color: '#345457' }}>{formatPrice(book.price)}</p>
+                <div className="mt-6">
+                  {hasPromo(book) && (
+                    <p className="text-sm text-gray-400 line-through">{formatPrice(book.price)}</p>
+                  )}
+                  <p className="text-2xl font-bold" style={{ color: '#345457' }}>
+                    {formatPrice(effectivePrice(book))}
+                    {hasPromo(book) && (
+                      <span className="ml-2 text-[11px] font-bold uppercase tracking-wide align-middle px-1.5 py-0.5 rounded" style={{ backgroundColor: 'rgba(200,168,107,0.15)', color: '#9C7A3F' }}>
+                        Oferta
+                      </span>
+                    )}
+                  </p>
+                </div>
 
                 {book.description && (
                   <p className="text-gray-600 text-[14px] leading-relaxed mt-4 max-w-md">{book.description}</p>
@@ -309,7 +322,7 @@ export default function BookDetailPage({ params }: { params: Promise<{ id: strin
                     </button>
                     <span className="w-6 text-center text-sm font-medium text-gray-700">{quantity}</span>
                     <button
-                      onClick={() => setQuantity(q => q + 1)}
+                      onClick={() => setQuantity(q => (typeof book.stock === 'number' ? Math.min(book.stock, q + 1) : q + 1))}
                       className="w-9 h-9 rounded-full text-gray-500 hover:text-[#345457] transition-colors duration-300"
                       aria-label="Sumar cantidad"
                     >

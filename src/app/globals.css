@@ -26,3 +26,231 @@ body {
   scrollbar-width: none;
 }
 
+/* ============================================================================
+   MARLI LOADER — libro abierto, página flexible (src/components/MarliLoader.tsx)
+   SVG puro + CSS. Los ids de <defs> (gradientes, la forma base) se namespacean
+   por instancia vía useId() en el componente, así que estas reglas por clase
+   se comparten entre varias instancias montadas a la vez sin conflicto.
+
+   CÓMO FUNCIONA (distinto del intento anterior — ver historial):
+
+   1. La curvatura de la hoja NO se simula con scaleX/skew sobre una forma
+      rígida. Se anima directamente la geometría del <path> — el atributo
+      `d` — vía @keyframes. El navegador interpola las curvas Bézier cuadro
+      a cuadro: la hoja realmente cambia de forma (se pandea en "S"), no
+      solo rota.
+
+   2. El giro (que pase de la derecha a la izquierda) es un rotateY() 3D
+      genuino con perspective(), NO un scaleX fingiendo compresión. El
+      escorzo al pasar de canto sale gratis de la proyección en perspectiva
+      real.
+
+   3. Una sola forma base animada (`.leaf-base-d`, dentro de <defs>) se
+      referencia 4 veces con <use>: sombra proyectada, filo de papel, dorso
+      (verso) y frente (recto). Las 4 comparten exactamente la misma
+      curvatura y el mismo giro — se mueven pegadas, como capas del mismo
+      papel — pero cada una tiene su propia animación de opacidad/luz.
+
+   4. El pivote de giro es un punto FIJO en el espacio del viewBox
+      (transform-box: view-box + transform-origin en px), no relativo al
+      bounding box de la forma — porque ese bounding box cambia de tamaño
+      en cada cuadro (la hoja se curva), y un origen relativo a esa caja
+      "caminaría" en vez de quedarse clavado en el lomo del libro.
+
+   5. El rebote al asentarse es una sobre-rotación real (pasa de -180°,
+      llega a -186°, vuelve a -180°) con un cubic-bezier de resorte puesto
+      directamente en ese tramo del keyframe — no es un efecto aparte, es
+      la curva de aceleración misma.
+   ============================================================================ */
+
+.marli-loader { display: block; }
+.marli-loader svg { display: block; width: 100%; height: 100%; overflow: visible; }
+
+/* Pivote de giro: fijo en coordenadas del viewBox (160,112 = centro del lomo) */
+.marli-loader .leaf-shadow,
+.marli-loader .leaf-edge,
+.marli-loader .leaf-edge-wrap,
+.marli-loader .leaf-recto-group,
+.marli-loader .leaf-verso-group {
+  transform-box: view-box;
+  transform-origin: 160px 112px;
+}
+
+.marli-loader .ambient-light { opacity: .5; }
+.marli-loader .ground-shadow { fill: #14262a; opacity: .12; filter: blur(4.5px); }
+.marli-loader .stack-sheet { stroke-width: 1; }
+.marli-loader .gutter-shadow { opacity: .55; }
+.marli-loader .spine { stroke: rgba(30, 49, 52, .28); stroke-width: 1; }
+.marli-loader .spine-ridge { stroke: rgba(30, 49, 52, .16); stroke-width: .8; stroke-linecap: round; }
+
+.marli-loader .leaf-base-d {
+  animation: marliLeafD var(--marli-duration, 1.8s) var(--marli-ease, cubic-bezier(.37, 0, .63, 1)) infinite;
+}
+.marli-loader .leaf-shadow {
+  fill: #16292b;
+  filter: blur(3.5px);
+  animation:
+    marliLeafTurn var(--marli-duration, 1.8s) var(--marli-ease, cubic-bezier(.37, 0, .63, 1)) infinite,
+    marliCastShadow var(--marli-duration, 1.8s) var(--marli-ease, cubic-bezier(.37, 0, .63, 1)) infinite;
+}
+.marli-loader .leaf-edge-wrap {
+  transform: scale(1.018); /* asoma un pelo más allá del recto/verso: lee como el canto del papel */
+}
+.marli-loader .leaf-edge {
+  fill: #E7DCC0;
+  animation:
+    marliLeafTurn var(--marli-duration, 1.8s) var(--marli-ease, cubic-bezier(.37, 0, .63, 1)) infinite,
+    marliEdgeSliver var(--marli-duration, 1.8s) var(--marli-ease, cubic-bezier(.37, 0, .63, 1)) infinite;
+}
+/* Frente y dorso son grupos (forma + líneas de "texto") para que ambos se
+   muevan pegados como una sola hoja — si las líneas quedaran sueltas en el
+   SVG, se quedarían fijas mientras la hoja gira. */
+.marli-loader .leaf-verso-group {
+  animation:
+    marliLeafTurn var(--marli-duration, 1.8s) var(--marli-ease, cubic-bezier(.37, 0, .63, 1)) infinite,
+    marliVersoOpacity var(--marli-duration, 1.8s) linear infinite;
+}
+.marli-loader .leaf-verso-shape { stroke: rgba(30, 49, 52, .3); stroke-width: 1.1; }
+
+.marli-loader .leaf-recto-group {
+  animation:
+    marliLeafTurn var(--marli-duration, 1.8s) var(--marli-ease, cubic-bezier(.37, 0, .63, 1)) infinite,
+    marliRectoOpacity var(--marli-duration, 1.8s) linear infinite,
+    marliLeafLight var(--marli-duration, 1.8s) var(--marli-ease, cubic-bezier(.37, 0, .63, 1)) infinite;
+}
+.marli-loader .leaf-recto-shape { stroke-width: 1.2; }
+.marli-loader .leaf-hint { stroke: rgba(30, 49, 52, .14); stroke-width: .7; }
+
+/* Los 12 cortes (0, 5, 15, 28, 40, 50, 60, 72, 85, 93, 97, 100 %) son los
+   mismos en marliLeafD y marliLeafTurn para que la curvatura y el giro
+   avancen siempre de la mano. Los comandos del path (M L C C L Z) son
+   IDÉNTICOS en las 12 paradas — solo cambian las coordenadas — porque así
+   es como el navegador interpola `d` cuadro a cuadro sin saltos. */
+@keyframes marliLeafD {
+  0%, 100% { d: path("M160,48 L256,46 C256,70 256,97 256,112 C256,127 256,154 256,178 L160,176 Z"); }
+  5%, 97%  { d: path("M160,48 L256,46 C255,70 254,97 253,112 C254,127 255,154 256,178 L160,176 Z"); }
+  15%      { d: path("M160,48 L256,46 C249,70 240,97 234,112 C240,127 249,154 256,178 L160,176 Z"); }
+  28%      { d: path("M160,48 L256,46 C236,70 207,97 190,112 C207,127 236,154 256,178 L160,176 Z"); }
+  40%      { d: path("M160,48 L256,46 C220,70 166,97 136,112 C166,127 220,154 256,178 L160,176 Z"); }
+  50%      { d: path("M160,48 L256,46 C208,70 136,97 96,112 C136,127 208,154 256,178 L160,176 Z"); }
+  60%      { d: path("M160,48 L256,46 C221,70 169,97 140,112 C169,127 221,154 256,178 L160,176 Z"); }
+  72%      { d: path("M160,48 L256,46 C237,70 208,97 192,112 C208,127 237,154 256,178 L160,176 Z"); }
+  85%      { d: path("M160,48 L256,46 C250,70 241,97 236,112 C241,127 250,154 256,178 L160,176 Z"); }
+  93%      { d: path("M160,48 L256,46 C257,70 258,97 258,112 C258,127 257,154 256,178 L160,176 Z"); }
+}
+
+@keyframes marliLeafTurn {
+  0%   { transform: perspective(820px) rotateY(0deg)    translateY(0px); }
+  5%   { transform: perspective(820px) rotateY(-3deg)   translateY(-.3px); }
+  15%  { transform: perspective(820px) rotateY(-14deg)  translateY(-1.5px); }
+  28%  { transform: perspective(820px) rotateY(-34deg)  translateY(-4px); }
+  40%  { transform: perspective(820px) rotateY(-60deg)  translateY(-7px); }
+  50%  { transform: perspective(820px) rotateY(-90deg)  translateY(-9px); }
+  60%  { transform: perspective(820px) rotateY(-120deg) translateY(-7px); }
+  72%  { transform: perspective(820px) rotateY(-146deg) translateY(-4px); }
+  85%  { transform: perspective(820px) rotateY(-168deg) translateY(-1.2px); }
+  93%  { transform: perspective(820px) rotateY(-181deg) translateY(-.2px); }
+  /* Rebote: se pasa de -180° y vuelve — un resorte real, no un adorno aparte */
+  97%  { transform: perspective(820px) rotateY(-186deg) translateY(.3px); animation-timing-function: cubic-bezier(.3, 1.6, .5, 1); }
+  100% { transform: perspective(820px) rotateY(-180deg) translateY(0px); animation-timing-function: cubic-bezier(.22, 1, .36, 1); }
+}
+
+/* Luz: se apaga un poco justo al pasar de canto (menos superficie mirando a
+   la fuente de luz), vuelve a brillar al asentarse — igual que papel real. */
+@keyframes marliLeafLight {
+  0%, 100% { filter: brightness(1)   saturate(1)   drop-shadow(0 3px 5px rgba(20, 38, 42, .18)); }
+  15%      { filter: brightness(.98) saturate(.98) drop-shadow(0 3px 5px rgba(20, 38, 42, .16)); }
+  40%      { filter: brightness(.92) saturate(.94) drop-shadow(0 1px 2px rgba(20, 38, 42, .1)); }
+  50%      { filter: brightness(.87) saturate(.9)  drop-shadow(0 0px 1px rgba(20, 38, 42, .06)); }
+  60%      { filter: brightness(.92) saturate(.94) drop-shadow(0 1px 2px rgba(20, 38, 42, .1)); }
+  85%      { filter: brightness(.98) saturate(.98) drop-shadow(0 3px 5px rgba(20, 38, 42, .16)); }
+}
+
+/* Frente y dorso son dos caras DISTINTAS con crossfade en el punto exacto
+   donde la hoja pasa de canto — así se vende el espesor del papel. */
+@keyframes marliRectoOpacity {
+  0%, 38%   { opacity: 1; }
+  47%       { opacity: .55; }
+  51%, 100% { opacity: 0; }
+}
+@keyframes marliVersoOpacity {
+  0%, 38%   { opacity: 0; }
+  47%       { opacity: .45; }
+  51%, 100% { opacity: 1; }
+}
+
+@keyframes marliCastShadow {
+  0%, 100% { opacity: 0; }
+  8%       { opacity: .06; }
+  25%      { opacity: .2; }
+  50%      { opacity: .28; }
+  75%      { opacity: .2; }
+  92%      { opacity: .05; }
+}
+
+@keyframes marliEdgeSliver {
+  0%, 100% { opacity: 0; }
+  30%      { opacity: .1; }
+  50%      { opacity: .55; }
+  70%      { opacity: .1; }
+}
+
+/* 6 instancias del mismo path (✦), cada una con su PROPIO keyframes: aparecen
+   en instantes distintos, escalan y rotan distinto, y usan curvas de
+   aceleración distintas — para que no se lean como una animación clonada. */
+.marli-loader .spark {
+  transform-box: fill-box;
+  transform-origin: 50% 50%;
+  fill: #C8A86B;
+  opacity: 0;
+  animation-duration: var(--marli-duration, 1.8s);
+  animation-iteration-count: infinite;
+}
+.marli-loader .spark-1 { animation-name: marliSpark1; animation-timing-function: cubic-bezier(.2, 1.4, .4, 1); }
+.marli-loader .spark-2 { animation-name: marliSpark2; animation-timing-function: cubic-bezier(.34, 1.56, .64, 1); }
+.marli-loader .spark-3 { animation-name: marliSpark3; animation-timing-function: ease-out; }
+.marli-loader .spark-4 { animation-name: marliSpark4; animation-timing-function: cubic-bezier(.2, 1.4, .4, 1); }
+.marli-loader .spark-5 { animation-name: marliSpark5; animation-timing-function: ease-out; }
+.marli-loader .spark-6 { animation-name: marliSpark6; animation-timing-function: cubic-bezier(.34, 1.56, .64, 1); }
+
+@keyframes marliSpark1 {
+  0%, 84%   { opacity: 0; transform: scale(0)    rotate(0deg); }
+  88%       { opacity: 1; transform: scale(1.25) rotate(12deg); }
+  92%       { opacity: 1; transform: scale(1)    rotate(6deg); }
+  97%, 100% { opacity: 0; transform: scale(.5)   rotate(2deg); }
+}
+@keyframes marliSpark2 {
+  0%, 87%   { opacity: 0; transform: scale(0)    rotate(0deg); }
+  90%       { opacity: 1; transform: scale(1.15) rotate(-10deg); }
+  94%       { opacity: .9; transform: scale(.95) rotate(-4deg); }
+  99%, 100% { opacity: 0; transform: scale(.4)   rotate(-2deg); }
+}
+@keyframes marliSpark3 {
+  0%, 89%   { opacity: 0; transform: scale(0)    rotate(0deg); }
+  92%       { opacity: 1; transform: scale(1.35) rotate(14deg); }
+  96%       { opacity: 1; transform: scale(1.05) rotate(7deg); }
+  100%      { opacity: 0; transform: scale(.45)  rotate(3deg); }
+}
+@keyframes marliSpark4 {
+  0%, 82%   { opacity: 0; transform: scale(0)    rotate(0deg); }
+  86%       { opacity: 1; transform: scale(1.1)  rotate(-8deg); }
+  90%       { opacity: .85; transform: scale(.9) rotate(-3deg); }
+  95%, 100% { opacity: 0; transform: scale(.4)   rotate(-1deg); }
+}
+@keyframes marliSpark5 {
+  0%, 88%     { opacity: 0; transform: scale(0)   rotate(0deg); }
+  91%         { opacity: 1; transform: scale(1.2) rotate(9deg); }
+  95%         { opacity: .9; transform: scale(1)  rotate(4deg); }
+  99.5%, 100% { opacity: 0; transform: scale(.4)  rotate(1deg); }
+}
+@keyframes marliSpark6 {
+  0%, 90%   { opacity: 0; transform: scale(0)    rotate(0deg); }
+  93%       { opacity: 1; transform: scale(1.3)  rotate(-13deg); }
+  96%       { opacity: 1; transform: scale(1.02) rotate(-6deg); }
+  100%      { opacity: 0; transform: scale(.5)   rotate(-2deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .marli-loader * { animation-duration: 3.6s !important; }
+}
+
