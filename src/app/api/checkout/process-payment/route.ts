@@ -37,13 +37,16 @@ export async function POST(req: NextRequest) {
         province: string;
         postalCode: string;
         reference: string;
+        deliveryMethod?: 'shipping' | 'pickup';
       };
       items: CartItemInput[];
       couponCode?: string;
       formData: CardFormData;
     };
 
-    if (!customer?.name || !customer?.email || !customer?.address || !customer?.city || !customer?.province || !customer?.postalCode || !customer?.reference) {
+    const isPickup = customer?.deliveryMethod === 'pickup';
+
+    if (!customer?.name || !customer?.email || (!isPickup && (!customer?.address || !customer?.city || !customer?.province || !customer?.postalCode || !customer?.reference))) {
       return NextResponse.json({ error: 'Faltan datos del cliente.' }, { status: 400 });
     }
     if (!formData?.token) {
@@ -54,11 +57,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'El pago con tarjeta no está disponible en este momento.' }, { status: 503 });
     }
 
-    const resolved = await resolveOrder(items, couponCode);
+    const resolved = await resolveOrder(items, couponCode, isPickup ? 'pickup' : 'shipping');
     if (!resolved.ok) {
       return NextResponse.json({ error: resolved.error }, { status: 400 });
     }
-    const { orderItems, discountAmount, couponCode: appliedCoupon, totalAmount } = resolved.order;
+    const { orderItems, discountAmount, couponCode: appliedCoupon, shippingCost, totalAmount } = resolved.order;
 
     const { data: order, error: orderError } = await supabaseAdmin
       .from('orders')
@@ -66,11 +69,13 @@ export async function POST(req: NextRequest) {
         customer_name: customer.name,
         customer_email: customer.email,
         customer_phone: customer.phone || null,
-        shipping_address: customer.address,
-        city: customer.city,
-        province: customer.province,
-        postal_code: customer.postalCode,
-        address_reference: customer.reference,
+        shipping_address: isPickup ? 'Retiro en persona' : customer.address,
+        city: isPickup ? null : customer.city,
+        province: isPickup ? null : customer.province,
+        postal_code: isPickup ? null : customer.postalCode,
+        address_reference: isPickup ? null : customer.reference,
+        delivery_method: isPickup ? 'pickup' : 'shipping',
+        shipping_cost: shippingCost,
         total_amount: totalAmount,
         coupon_code: appliedCoupon,
         discount_amount: discountAmount,

@@ -31,19 +31,28 @@ export default async function EtiquetaEnvioPage({ params }: { params: Promise<{ 
           {order.customer_name}
         </h1>
 
-        <div className="space-y-3 text-lg text-gray-800">
-          <p>{order.shipping_address}</p>
-          {(order.city || order.province || order.postal_code) && (
-            <p>{[order.city, order.province, order.postal_code && `CP ${order.postal_code}`].filter(Boolean).join(' — ')}</p>
-          )}
-          {order.customer_phone && <p>Tel: {order.customer_phone}</p>}
-        </div>
-
-        {order.address_reference && (
-          <div className="mt-6 pt-4 border-t border-gray-200">
-            <p className="text-[12px] font-semibold text-gray-400 mb-1">Referencia</p>
-            <p className="text-base text-gray-700">{order.address_reference}</p>
+        {order.delivery_method === 'pickup' ? (
+          <div className="space-y-3 text-lg text-gray-800">
+            <p className="font-semibold" style={{ color: '#345457' }}>🏬 Retiro en persona</p>
+            {order.customer_phone && <p>Tel: {order.customer_phone}</p>}
           </div>
+        ) : (
+          <>
+            <div className="space-y-3 text-lg text-gray-800">
+              <p>{order.shipping_address}</p>
+              {(order.city || order.province || order.postal_code) && (
+                <p>{[order.city, order.province, order.postal_code && `CP ${order.postal_code}`].filter(Boolean).join(' — ')}</p>
+              )}
+              {order.customer_phone && <p>Tel: {order.customer_phone}</p>}
+            </div>
+
+            {order.address_reference && (
+              <div className="mt-6 pt-4 border-t border-gray-200">
+                <p className="text-[12px] font-semibold text-gray-400 mb-1">Referencia</p>
+                <p className="text-base text-gray-700">{order.address_reference}</p>
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>

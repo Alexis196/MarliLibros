@@ -214,6 +214,8 @@ export default function BookDetailPage({ params }: { params: Promise<{ id: strin
 
   const now = new Date().toISOString();
   const isNew = book?.new_until && book.new_until > now;
+  const outOfStock = book?.stock === 0;
+  const lowStock = typeof book?.stock === 'number' && book.stock > 0 && book.stock <= 3;
 
   return (
     <>
@@ -254,16 +256,30 @@ export default function BookDetailPage({ params }: { params: Promise<{ id: strin
               <div className="w-full max-w-[220px] sm:max-w-none mx-auto">
               <div className="relative rounded-2xl overflow-hidden bg-white border border-black/5" style={{ aspectRatio: '2/3', boxShadow: '0 8px 24px rgba(52,84,87,0.08)' }}>
                 {book.cover_url ? (
-                  <img src={book.cover_url} alt={book.title} className="absolute inset-0 w-full h-full object-cover" />
+                  <img
+                    src={book.cover_url}
+                    alt={book.title}
+                    className={`absolute inset-0 w-full h-full object-cover ${outOfStock ? 'opacity-50' : ''}`}
+                  />
                 ) : (
                   <div className="absolute inset-0" style={{ background: 'linear-gradient(145deg, #345457, #587F82)' }} />
                 )}
-                {isNew && (
+                {isNew && !outOfStock && (
                   <span
                     className="absolute top-3 left-3 text-white text-[10px] font-bold px-2 py-1 rounded uppercase tracking-wide"
                     style={{ backgroundColor: '#587F82' }}
                   >
                     Nuevo
+                  </span>
+                )}
+                {outOfStock && (
+                  <span className="absolute top-3 left-3 text-white text-[10px] font-bold px-2 py-1 rounded uppercase tracking-wide bg-gray-500">
+                    Sin stock
+                  </span>
+                )}
+                {lowStock && (
+                  <span className="absolute top-3 left-3 text-white text-[10px] font-bold px-2 py-1 rounded uppercase tracking-wide" style={{ backgroundColor: '#C8A86B' }}>
+                    Últimas unidades
                   </span>
                 )}
               </div>

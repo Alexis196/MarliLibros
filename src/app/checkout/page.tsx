@@ -7,6 +7,7 @@ import { initMercadoPago, CardPayment } from '@mercadopago/sdk-react';
 import { useCart } from '@/contexts/CartContext';
 import { TransactionalHeader, TransactionalFooter } from '@/components/TransactionalLayout';
 import { MarliLoader } from '@/components/MarliLoader';
+import { shippingCostFor } from '@/lib/shipping';
 
 const MP_PUBLIC_KEY = process.env.NEXT_PUBLIC_MERCADOPAGO_PUBLIC_KEY;
 
@@ -45,7 +46,11 @@ type AppliedCoupon = { code: string; discountAmount: number };
 
 export default function CheckoutPage() {
   const router = useRouter();
-  const { items, totalPrice } = useCart();
+  const { items, totalPrice, liveStock, refreshStock } = useCart();
+  const hasStockIssue = items.some(i => {
+    const stock = liveStock[i.bookId];
+    return typeof stock === 'number' && i.quantity > stock;
+  });
   const [form, setForm] = useState({
     name: '',
     email: '',
@@ -57,6 +62,7 @@ export default function CheckoutPage() {
     reference: '',
   });
   const [activeTab, setActiveTab] = useState<'card' | 'mercadopago'>('card');
+  const [deliveryMethod, setDeliveryMethod] = useState<'shipping' | 'pickup'>('shipping');
 
   const [couponInput, setCouponInput] = useState('');
   const [appliedCoupon, setAppliedCoupon] = useState<AppliedCoupon | null>(null);
@@ -68,7 +74,10 @@ export default function CheckoutPage() {
   const [mpReady, setMpReady] = useState(false);
 
   const discountAmount = appliedCoupon?.discountAmount ?? 0;
-  const finalTotal = Math.round((totalPrice - discountAmount) * 100) / 100;
+  const shippingCost = shippingCostFor(deliveryMethod);
+  const finalTotal = Math.round((totalPrice - discountAmount + shippingCost) * 100) / 100;
+
+  useEffect(() => { refreshStock(); }, [refreshStock]);
 
   useEffect(() => {
     if (MP_PUBLIC_KEY) {
@@ -82,7 +91,9 @@ export default function CheckoutPage() {
       setForm(prev => ({ ...prev, [field]: e.target.value }));
 
   const missingShippingData = () =>
-    !form.name || !form.email || !form.address || !form.city || !form.province || !form.postalCode || !form.reference;
+    deliveryMethod === 'pickup'
+      ? !form.name || !form.email || !form.phone
+      : !form.name || !form.email || !form.address || !form.city || !form.province || !form.postalCode || !form.reference;
 
   const applyCoupon = async () => {
     if (!couponInput.trim()) return;
@@ -127,6 +138,10 @@ export default function CheckoutPage() {
       setError('Completá tus datos de envío antes de pagar.');
       return;
     }
+    if (hasStockIssue) {
+      setError('Ajustá las cantidades del carrito antes de pagar: algún libro ya no tiene stock suficiente.');
+      return;
+    }
     setError(null);
     setSubmitting(true);
     try {
@@ -134,7 +149,7 @@ export default function CheckoutPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          customer: form,
+          customer: { ...form, deliveryMethod },
           items: items.map(i => ({ bookId: i.bookId, quantity: i.quantity })),
           couponCode: appliedCoupon?.code,
         }),
@@ -161,13 +176,17 @@ export default function CheckoutPage() {
       setError('Completá tus datos de envío antes de pagar.');
       throw new Error('missing-shipping-data');
     }
+    if (hasStockIssue) {
+      setError('Ajustá las cantidades del carrito antes de pagar: algún libro ya no tiene stock suficiente.');
+      throw new Error('missing-shipping-data');
+    }
     setError(null);
     try {
       const res = await fetch('/api/checkout/process-payment', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          customer: form,
+          customer: { ...form, deliveryMethod },
           items: items.map(i => ({ bookId: i.bookId, quantity: i.quantity })),
           couponCode: appliedCoupon?.code,
           formData: cardFormData,
@@ -223,7 +242,32 @@ export default function CheckoutPage() {
             {/* Datos de envío + pago */}
             <div className="lg:col-span-2 space-y-6">
               <div className="rounded-2xl bg-white p-5 sm:p-7" style={{ boxShadow: '0 4px 20px rgba(52,84,87,0.06)' }}>
-                <h2 className="text-base font-bold mb-5" style={{ color: '#345457' }}>Datos de envío</h2>
+                <h2 className="text-base font-bold mb-5" style={{ color: '#345457' }}>Entrega</h2>
+
+                <div className="flex gap-2 mb-6">
+                  <button
+                    type="button"
+                    onClick={() => setDeliveryMethod('shipping')}
+                    className={`flex-1 px-4 py-2.5 rounded-xl text-sm font-semibold border transition-colors duration-300 ${
+                      deliveryMethod === 'shipping'
+                        ? 'bg-[#345457] text-white border-[#345457]'
+                        : 'bg-white text-gray-500 border-gray-200 hover:border-[#345457]/30 hover:text-[#345457]'
+                    }`}
+                  >
+                    📦 Envío a domicilio
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDeliveryMethod('pickup')}
+                    className={`flex-1 px-4 py-2.5 rounded-xl text-sm font-semibold border transition-colors duration-300 ${
+                      deliveryMethod === 'pickup'
+                        ? 'bg-[#345457] text-white border-[#345457]'
+                        : 'bg-white text-gray-500 border-gray-200 hover:border-[#345457]/30 hover:text-[#345457]'
+                    }`}
+                  >
+                    🏬 Retiro en persona
+                  </button>
+                </div>
 
                 <div className="space-y-4">
                   <div>
@@ -248,73 +292,88 @@ export default function CheckoutPage() {
                     <p className="text-[11px] text-gray-400 mt-1">A esta dirección te enviamos la confirmación de tu compra.</p>
                   </div>
                   <div>
-                    <label className="block text-[12px] font-medium text-gray-500 mb-1.5">Teléfono (opcional)</label>
+                    <label className="block text-[12px] font-medium text-gray-500 mb-1.5">
+                      Teléfono{deliveryMethod === 'pickup' ? '' : ' (opcional)'}
+                    </label>
                     <input
+                      required={deliveryMethod === 'pickup'}
                       type="tel"
                       value={form.phone}
                       onChange={update('phone')}
                       className="w-full rounded-xl border border-gray-200 px-3.5 py-2.5 text-sm outline-none transition-all duration-300 focus:border-[#345457] focus:shadow-[0_0_0_3px_rgba(52,84,87,0.08)]"
                     />
                   </div>
-                  <div>
-                    <label className="block text-[12px] font-medium text-gray-500 mb-1.5">Dirección de envío</label>
-                    <input
-                      required
-                      type="text"
-                      placeholder="Calle y número"
-                      value={form.address}
-                      onChange={update('address')}
-                      className="w-full rounded-xl border border-gray-200 px-3.5 py-2.5 text-sm outline-none transition-all duration-300 focus:border-[#345457] focus:shadow-[0_0_0_3px_rgba(52,84,87,0.08)]"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[12px] font-medium text-gray-500 mb-1.5">Barrio / Ciudad</label>
-                    <input
-                      required
-                      type="text"
-                      placeholder="Ej: Palermo, CABA"
-                      value={form.city}
-                      onChange={update('city')}
-                      className="w-full rounded-xl border border-gray-200 px-3.5 py-2.5 text-sm outline-none transition-all duration-300 focus:border-[#345457] focus:shadow-[0_0_0_3px_rgba(52,84,87,0.08)]"
-                    />
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-[12px] font-medium text-gray-500 mb-1.5">Provincia</label>
-                      <select
-                        required
-                        value={form.province}
-                        onChange={update('province')}
-                        className="w-full rounded-xl border border-gray-200 px-3.5 py-2.5 text-sm outline-none transition-all duration-300 focus:border-[#345457] focus:shadow-[0_0_0_3px_rgba(52,84,87,0.08)]"
-                      >
-                        <option value="" disabled>Elegir…</option>
-                        {PROVINCES.map(p => (
-                          <option key={p} value={p}>{p}</option>
-                        ))}
-                      </select>
+
+                  {deliveryMethod === 'pickup' ? (
+                    <div className="rounded-xl px-4 py-3" style={{ backgroundColor: 'rgba(52,84,87,0.06)' }}>
+                      <p className="text-[13px] font-semibold" style={{ color: '#345457' }}>Retirás tu pedido en el local.</p>
+                      <p className="text-[12px] text-gray-500 mt-1">
+                        Te contactamos por email o WhatsApp para coordinar día y horario apenas confirmemos tu pago.
+                      </p>
                     </div>
-                    <div>
-                      <label className="block text-[12px] font-medium text-gray-500 mb-1.5">Código postal</label>
-                      <input
-                        required
-                        type="text"
-                        value={form.postalCode}
-                        onChange={update('postalCode')}
-                        className="w-full rounded-xl border border-gray-200 px-3.5 py-2.5 text-sm outline-none transition-all duration-300 focus:border-[#345457] focus:shadow-[0_0_0_3px_rgba(52,84,87,0.08)]"
-                      />
-                    </div>
-                  </div>
-                  <div>
-                    <label className="block text-[12px] font-medium text-gray-500 mb-1.5">Referencia (piso, depto, entre calles, etc.)</label>
-                    <textarea
-                      required
-                      rows={2}
-                      value={form.reference}
-                      onChange={update('reference')}
-                      placeholder="Ej: Depto 4B, timbre 2, entre San Martín y Belgrano"
-                      className="w-full rounded-xl border border-gray-200 px-3.5 py-2.5 text-sm outline-none transition-all duration-300 focus:border-[#345457] focus:shadow-[0_0_0_3px_rgba(52,84,87,0.08)]"
-                    />
-                  </div>
+                  ) : (
+                    <>
+                      <div>
+                        <label className="block text-[12px] font-medium text-gray-500 mb-1.5">Dirección de envío</label>
+                        <input
+                          required
+                          type="text"
+                          placeholder="Calle y número"
+                          value={form.address}
+                          onChange={update('address')}
+                          className="w-full rounded-xl border border-gray-200 px-3.5 py-2.5 text-sm outline-none transition-all duration-300 focus:border-[#345457] focus:shadow-[0_0_0_3px_rgba(52,84,87,0.08)]"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[12px] font-medium text-gray-500 mb-1.5">Barrio / Ciudad</label>
+                        <input
+                          required
+                          type="text"
+                          placeholder="Ej: Palermo, CABA"
+                          value={form.city}
+                          onChange={update('city')}
+                          className="w-full rounded-xl border border-gray-200 px-3.5 py-2.5 text-sm outline-none transition-all duration-300 focus:border-[#345457] focus:shadow-[0_0_0_3px_rgba(52,84,87,0.08)]"
+                        />
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-[12px] font-medium text-gray-500 mb-1.5">Provincia</label>
+                          <select
+                            required
+                            value={form.province}
+                            onChange={update('province')}
+                            className="w-full rounded-xl border border-gray-200 px-3.5 py-2.5 text-sm outline-none transition-all duration-300 focus:border-[#345457] focus:shadow-[0_0_0_3px_rgba(52,84,87,0.08)]"
+                          >
+                            <option value="" disabled>Elegir…</option>
+                            {PROVINCES.map(p => (
+                              <option key={p} value={p}>{p}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-[12px] font-medium text-gray-500 mb-1.5">Código postal</label>
+                          <input
+                            required
+                            type="text"
+                            value={form.postalCode}
+                            onChange={update('postalCode')}
+                            className="w-full rounded-xl border border-gray-200 px-3.5 py-2.5 text-sm outline-none transition-all duration-300 focus:border-[#345457] focus:shadow-[0_0_0_3px_rgba(52,84,87,0.08)]"
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-[12px] font-medium text-gray-500 mb-1.5">Referencia (piso, depto, entre calles, etc.)</label>
+                        <textarea
+                          required
+                          rows={2}
+                          value={form.reference}
+                          onChange={update('reference')}
+                          placeholder="Ej: Depto 4B, timbre 2, entre San Martín y Belgrano"
+                          className="w-full rounded-xl border border-gray-200 px-3.5 py-2.5 text-sm outline-none transition-all duration-300 focus:border-[#345457] focus:shadow-[0_0_0_3px_rgba(52,84,87,0.08)]"
+                        />
+                      </div>
+                    </>
+                  )}
                 </div>
               </div>
 
@@ -349,7 +408,16 @@ export default function CheckoutPage() {
 
                 {error && <p className="text-sm text-red-500 mb-4">{error}</p>}
 
-                {activeTab === 'card' ? (
+                {hasStockIssue ? (
+                  <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3">
+                    <p className="text-sm font-medium" style={{ color: '#B85C5C' }}>
+                      Algún libro de tu carrito ya no tiene stock suficiente.
+                    </p>
+                    <Link href="/carrito" className="text-sm font-semibold underline" style={{ color: '#B85C5C' }}>
+                      Volver al carrito para ajustarlo →
+                    </Link>
+                  </div>
+                ) : activeTab === 'card' ? (
                   !MP_PUBLIC_KEY ? (
                     <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
                       <p className="text-sm text-amber-700">
@@ -448,6 +516,10 @@ export default function CheckoutPage() {
                     </div>
                   </>
                 )}
+                <div className="flex items-center justify-between text-sm text-gray-500">
+                  <span>Envío</span>
+                  <span>{shippingCost > 0 ? formatPrice(shippingCost) : 'Gratis'}</span>
+                </div>
                 <div className="flex items-center justify-between text-base font-bold pt-2" style={{ color: '#1E3134' }}>
                   <span>Total</span>
                   <span>{formatPrice(finalTotal)}</span>

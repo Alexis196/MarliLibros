@@ -33,7 +33,7 @@ function initials(name: string) {
 }
 
 function exportToCSV(orders: AdminOrder[], filename: string) {
-  const headers = ['ID', 'Cliente', 'Email', 'Teléfono', 'Dirección', 'Ciudad', 'Provincia', 'CP', 'Total', 'Estado', 'Despachado', 'Fecha'];
+  const headers = ['ID', 'Cliente', 'Email', 'Teléfono', 'Entrega', 'Dirección', 'Ciudad', 'Provincia', 'CP', 'Total', 'Estado', 'Despachado', 'Fecha'];
   const rows = orders.map(o => {
     const cfg = getStatusConfig(o.status, o.shipped);
     return [
@@ -41,6 +41,7 @@ function exportToCSV(orders: AdminOrder[], filename: string) {
       o.customer_name,
       o.customer_email,
       o.customer_phone ?? '',
+      o.delivery_method === 'pickup' ? 'Retiro en persona' : 'Envío a domicilio',
       o.shipping_address,
       o.city ?? '',
       o.province ?? '',
@@ -209,7 +210,7 @@ function OrderRow({ order, isFirst, selected, onSelect, onOpenPanel, onApprove, 
 
         {/* Destino */}
         <span className="text-[12px] text-gray-500 truncate">
-          {[order.city, order.province].filter(Boolean).join(', ') || '—'}
+          {order.delivery_method === 'pickup' ? '🏬 Retiro en persona' : [order.city, order.province].filter(Boolean).join(', ') || '—'}
         </span>
 
         {/* Items */}
@@ -305,7 +306,9 @@ function OrderRow({ order, isFirst, selected, onSelect, onOpenPanel, onApprove, 
           <div className="flex items-center gap-2 mt-0.5 flex-wrap">
             <StatusBadge status={order.status} shipped={order.shipped} />
             <span className="text-[11px] text-gray-400">{formatRelative(order.created_at)}</span>
-            {(order.city || order.province) && (
+            {order.delivery_method === 'pickup' ? (
+              <span className="text-[11px] text-gray-400">🏬 Retiro en persona</span>
+            ) : (order.city || order.province) && (
               <span className="text-[11px] text-gray-400">{[order.city, order.province].filter(Boolean).join(', ')}</span>
             )}
           </div>
@@ -435,15 +438,23 @@ function SidePanel({ order, onClose, onApprove, onShip, onReject, updatingId }: 
 
         {/* Shipping */}
         <div>
-          <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest mb-2">Envío</p>
-          <p className="text-[13px] text-gray-700">{order.shipping_address}</p>
-          {(order.city || order.province || order.postal_code) && (
-            <p className="text-[13px] text-gray-600 mt-0.5">
-              {[order.city, order.province, order.postal_code && `CP ${order.postal_code}`].filter(Boolean).join(' · ')}
-            </p>
-          )}
-          {order.address_reference && (
-            <p className="text-[12px] text-gray-400 mt-1">Ref: {order.address_reference}</p>
+          <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest mb-2">
+            {order.delivery_method === 'pickup' ? 'Retiro' : 'Envío'}
+          </p>
+          {order.delivery_method === 'pickup' ? (
+            <p className="text-[13px] text-gray-700">🏬 Retira en el local — coordinar por email o WhatsApp.</p>
+          ) : (
+            <>
+              <p className="text-[13px] text-gray-700">{order.shipping_address}</p>
+              {(order.city || order.province || order.postal_code) && (
+                <p className="text-[13px] text-gray-600 mt-0.5">
+                  {[order.city, order.province, order.postal_code && `CP ${order.postal_code}`].filter(Boolean).join(' · ')}
+                </p>
+              )}
+              {order.address_reference && (
+                <p className="text-[12px] text-gray-400 mt-1">Ref: {order.address_reference}</p>
+              )}
+            </>
           )}
         </div>
 

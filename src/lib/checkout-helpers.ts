@@ -1,6 +1,7 @@
 import { supabaseAdmin } from './supabase-admin';
 import { validateCoupon } from './coupons';
 import { effectivePrice } from './pricing';
+import { shippingCostFor, type DeliveryMethod } from './shipping';
 
 export type CartItemInput = { bookId: string; quantity: number };
 
@@ -21,14 +22,20 @@ export type ResolvedOrder = {
   subtotal: number;
   discountAmount: number;
   couponCode: string | null;
+  shippingCost: number;
   totalAmount: number;
 };
 
 export type ResolveOrderResult = { ok: true; order: ResolvedOrder } | { ok: false; error: string };
 
 // Nunca confiamos en precios ni descuentos calculados por el cliente: todo se vuelve a
-// resolver acá contra Supabase (precios reales) y el cupón (reglas reales).
-export async function resolveOrder(items: CartItemInput[], couponCode?: string): Promise<ResolveOrderResult> {
+// resolver acá contra Supabase (precios reales), el cupón (reglas reales) y el costo de
+// envío (tarifa fija del servidor, según el método de entrega).
+export async function resolveOrder(
+  items: CartItemInput[],
+  couponCode?: string,
+  deliveryMethod: DeliveryMethod = 'shipping'
+): Promise<ResolveOrderResult> {
   if (!Array.isArray(items) || items.length === 0) {
     return { ok: false, error: 'El carrito está vacío.' };
   }
@@ -88,6 +95,8 @@ export async function resolveOrder(items: CartItemInput[], couponCode?: string):
     resolvedCouponCode = result.code;
   }
 
+  const shippingCost = shippingCostFor(deliveryMethod);
+
   return {
     ok: true,
     order: {
@@ -95,7 +104,8 @@ export async function resolveOrder(items: CartItemInput[], couponCode?: string):
       subtotal,
       discountAmount,
       couponCode: resolvedCouponCode,
-      totalAmount: Math.round((subtotal - discountAmount) * 100) / 100,
+      shippingCost,
+      totalAmount: Math.round((subtotal - discountAmount + shippingCost) * 100) / 100,
     },
   };
 }

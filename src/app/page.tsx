@@ -660,6 +660,8 @@ function FeaturedAuthors({ authors, loading }: { authors: Author[]; loading: boo
   const scrollRef = useRef<HTMLDivElement>(null);
   useFadeUp(ref);
 
+  if (!loading && authors.length === 0) return null;
+
   const scroll = (dir: 'left' | 'right') => {
     scrollRef.current?.scrollBy({ left: dir === 'left' ? -240 : 240, behavior: 'smooth' });
   };
@@ -896,6 +898,7 @@ export default function Home() {
   const { novedades, featuredBooks, totalBooks, categoryCounts, loading: storeLoading } = useStore();
   const { authors, loading: authorsLoading } = useAuthors();
   const loading = storeLoading || authorsLoading;
+  const featuredAuthors = authors.filter(a => a.featured);
 
   return (
     <main style={{ backgroundColor: '#F7F6F2' }}>
@@ -905,7 +908,7 @@ export default function Home() {
       <Novedades books={novedades} loading={loading} />
       <AllBooks books={featuredBooks} loading={loading} />
       <Benefits />
-      <FeaturedAuthors authors={authors} loading={loading} />
+      <FeaturedAuthors authors={featuredAuthors} loading={loading} />
       <AboutMarli />
       <Footer />
     </main>

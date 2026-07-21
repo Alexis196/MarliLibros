@@ -16,6 +16,7 @@ export type AdminOrder = {
   province?: string | null;
   postal_code?: string | null;
   address_reference?: string | null;
+  delivery_method?: string | null;
   total_amount: number;
   shipped: boolean;
   created_at: string;

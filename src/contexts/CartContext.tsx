@@ -1,7 +1,8 @@
 'use client';
 
-import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react';
 import { effectivePrice } from '@/lib/pricing';
+import { supabase } from '@/lib/supabase';
 
 export type CartItem = {
   bookId: string;
@@ -19,7 +20,11 @@ type AddableBook = {
   price: number;
   promotional_price?: number | null;
   cover_url?: string;
+  stock?: number | null;
 };
+
+// bookId -> stock actual (null = sin control de stock, siempre disponible)
+export type LiveStock = Record<string, number | null>;
 
 type CartContextValue = {
   items: CartItem[];
@@ -32,6 +37,8 @@ type CartContextValue = {
   isDrawerOpen: boolean;
   openDrawer: () => void;
   closeDrawer: () => void;
+  liveStock: LiveStock;
+  refreshStock: () => void;
 };
 
 const CartContext = createContext<CartContextValue | null>(null);
@@ -42,6 +49,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const [items, setItems] = useState<CartItem[]>([]);
   const [hydrated, setHydrated] = useState(false);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const [liveStock, setLiveStock] = useState<LiveStock>({});
 
   useEffect(() => {
     try {
@@ -58,11 +66,43 @@ export function CartProvider({ children }: { children: ReactNode }) {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
   }, [items, hydrated]);
 
+  // El carrito persiste en localStorage y puede quedar viejo (el usuario lo dejó
+  // armado hace días): antes de mostrarlo o dejar sumar cantidad, siempre
+  // reconsultamos el stock real en vez de confiar en lo que tenía al agregarlo.
+  const refreshStock = useCallback(() => {
+    if (items.length === 0) return;
+    supabase
+      .from('books')
+      .select('id, stock')
+      .in('id', items.map(i => i.bookId))
+      .then(({ data }) => {
+        if (!data) return;
+        setLiveStock(prev => {
+          const next = { ...prev };
+          for (const b of data) next[b.id as string] = b.stock as number | null;
+          return next;
+        });
+      });
+  }, [items]);
+
+  useEffect(() => {
+    if (hydrated) refreshStock();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hydrated]);
+
+  const stockCap = (bookId: string, fallback?: number | null): number | null => {
+    const known = liveStock[bookId];
+    return known !== undefined ? known : (fallback ?? null);
+  };
+
   const addItem = (book: AddableBook) => {
     setItems(prev => {
       const existing = prev.find(i => i.bookId === book.id);
+      const cap = stockCap(book.id, book.stock);
+      const nextQty = (existing?.quantity ?? 0) + 1;
+      if (typeof cap === 'number' && nextQty > cap) return prev;
       if (existing) {
-        return prev.map(i => (i.bookId === book.id ? { ...i, quantity: i.quantity + 1 } : i));
+        return prev.map(i => (i.bookId === book.id ? { ...i, quantity: nextQty } : i));
       }
       return [...prev, { bookId: book.id, title: book.title, author_name: book.author_name, price: effectivePrice(book), cover_url: book.cover_url, quantity: 1 }];
     });
@@ -75,7 +115,9 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
   const updateQuantity = (bookId: string, quantity: number) => {
     if (quantity <= 0) return removeItem(bookId);
-    setItems(prev => prev.map(i => (i.bookId === bookId ? { ...i, quantity } : i)));
+    const cap = stockCap(bookId);
+    const clamped = typeof cap === 'number' ? Math.min(quantity, Math.max(cap, 0)) : quantity;
+    setItems(prev => prev.map(i => (i.bookId === bookId ? { ...i, quantity: clamped } : i)));
   };
 
   const clear = () => setItems([]);
@@ -94,8 +136,10 @@ export function CartProvider({ children }: { children: ReactNode }) {
         totalItems,
         totalPrice,
         isDrawerOpen,
-        openDrawer: () => setIsDrawerOpen(true),
+        openDrawer: () => { refreshStock(); setIsDrawerOpen(true); },
         closeDrawer: () => setIsDrawerOpen(false),
+        liveStock,
+        refreshStock,
       }}
     >
       {children}

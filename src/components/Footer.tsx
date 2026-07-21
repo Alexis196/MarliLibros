@@ -2,58 +2,17 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { CATEGORY_NAMES } from '@/lib/categories';
 
-function IconInstagram() {
-  return (
-    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-      <rect width="20" height="20" x="2" y="2" rx="5" ry="5" />
-      <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z" />
-      <line x1="17.5" x2="17.51" y1="6.5" y2="6.5" />
-    </svg>
-  );
-}
-
-function IconWhatsApp() {
-  return (
-    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
-    </svg>
-  );
-}
-
-function IconVisa() {
-  return (
-    <svg width="36" height="14" viewBox="0 0 72 28" aria-hidden="true">
-      <text x="0" y="22" fontFamily="Arial, Helvetica, sans-serif" fontWeight="800" fontStyle="italic" fontSize="24" fill="#1A1F71">VISA</text>
-    </svg>
-  );
-}
-
-function IconMastercard() {
-  return (
-    <svg width="30" height="20" viewBox="0 0 30 20" aria-hidden="true">
-      <circle cx="11" cy="10" r="9" fill="#EB001B" />
-      <circle cx="19" cy="10" r="9" fill="#F79E1B" style={{ mixBlendMode: 'multiply' }} />
-    </svg>
-  );
-}
-
-function IconMercadoPago() {
-  return (
-    <svg width="68" height="14" viewBox="0 0 132 28" aria-hidden="true">
-      <text x="0" y="21" fontFamily="Arial, Helvetica, sans-serif" fontWeight="700" fontSize="20" fill="#009EE3">mercado pago</text>
-    </svg>
-  );
-}
-
 const SOCIAL_LINKS = {
   instagram: 'https://www.instagram.com/marlilibros/',
-  whatsapp: 'https://wa.me/5493704262031',
+  whatsapp: 'https://wa.me/5493705217630',
 };
 
+// El logo de Mercado Pago es blanco (sin fondo propio), a diferencia de Visa/Mastercard
+// que ya traen sus colores — por eso necesita un chip de color en vez del claro.
 const PAYMENT_METHODS = [
-  { name: 'Visa', Icon: IconVisa },
-  { name: 'Mastercard', Icon: IconMastercard },
-  { name: 'MercadoPago', Icon: IconMercadoPago },
+  { name: 'Visa', src: '/visa.svg', width: 28, height: 28, bg: '#FCFBF8' },
+  { name: 'Mastercard', src: '/mastercard.svg', width: 40, height: 28, bg: '#FCFBF8' },
+  { name: 'MercadoPago', src: '/MP_RGB_HANDSHAKE_pluma_horizontal.svg', width: 52, height: 21, bg: '#009EE3' },
 ];
 
 const FOOTER_CATEGORIES_LIMIT = 6;
@@ -98,10 +57,9 @@ export function Footer() {
                     target="_blank"
                     rel="noopener noreferrer"
                     aria-label="Escribinos por WhatsApp"
-                    className="flex items-center justify-center w-9 h-9 rounded-full hover:opacity-85 hover:-translate-y-0.5 transition-all duration-200"
-                    style={{ backgroundColor: '#25D366' }}
+                    className="flex items-center justify-center w-9 h-9 hover:opacity-85 hover:-translate-y-0.5 transition-all duration-200"
                   >
-                    <IconWhatsApp />
+                    <Image src="/whatsapp.svg" alt="WhatsApp" width={36} height={36} />
                   </a>
                 )}
                 {SOCIAL_LINKS.instagram && (
@@ -110,10 +68,9 @@ export function Footer() {
                     target="_blank"
                     rel="noopener noreferrer"
                     aria-label="Seguinos en Instagram"
-                    className="flex items-center justify-center w-9 h-9 rounded-full hover:opacity-85 hover:-translate-y-0.5 transition-all duration-200"
-                    style={{ background: 'linear-gradient(45deg, #F58529, #DD2A7B, #8134AF, #515BD4)' }}
+                    className="flex items-center justify-center w-9 h-9 hover:opacity-85 hover:-translate-y-0.5 transition-all duration-200"
                   >
-                    <IconInstagram />
+                    <Image src="/instagram.svg" alt="Instagram" width={36} height={36} />
                   </a>
                 )}
               </div>
@@ -136,9 +93,9 @@ export function Footer() {
           <div>
             <h4 className="font-bold text-[13px] mb-4">Medios de pago</h4>
             <div className="flex flex-wrap gap-2 mb-3">
-              {PAYMENT_METHODS.map(({ name, Icon }) => (
-                <span key={name} aria-label={name} title={name} className="flex items-center justify-center px-2.5 py-1.5 bg-[#FCFBF8] rounded">
-                  <Icon />
+              {PAYMENT_METHODS.map(({ name, src, width, height, bg }) => (
+                <span key={name} aria-label={name} title={name} className="flex items-center justify-center px-2.5 py-1.5 rounded" style={{ backgroundColor: bg }}>
+                  <Image src={src} alt={name} width={width} height={height} style={{ objectFit: 'contain' }} />
                 </span>
               ))}
             </div>

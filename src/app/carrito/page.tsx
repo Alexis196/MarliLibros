@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect } from 'react';
 import Link from 'next/link';
 import { useCart } from '@/contexts/CartContext';
 import { TransactionalHeader, TransactionalFooter } from '@/components/TransactionalLayout';
@@ -9,7 +10,13 @@ function formatPrice(price: number) {
 }
 
 export default function CarritoPage() {
-  const { items, removeItem, updateQuantity, totalPrice } = useCart();
+  const { items, removeItem, updateQuantity, totalPrice, liveStock, refreshStock } = useCart();
+  const hasStockIssue = items.some(i => {
+    const stock = liveStock[i.bookId];
+    return typeof stock === 'number' && i.quantity > stock;
+  });
+
+  useEffect(() => { refreshStock(); }, [refreshStock]);
 
   return (
     <>
@@ -37,14 +44,18 @@ export default function CarritoPage() {
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 sm:gap-8 items-start">
               {/* Lista de items */}
               <div className="lg:col-span-2 rounded-2xl bg-white p-3 sm:p-5" style={{ boxShadow: '0 4px 20px rgba(52,84,87,0.06)' }}>
-                {items.map((item, i) => (
+                {items.map((item, i) => {
+                  const stock = liveStock[item.bookId];
+                  const noStock = stock === 0;
+                  const atCap = typeof stock === 'number' && item.quantity >= stock;
+                  return (
                   <div
                     key={item.bookId}
                     className={`flex items-center gap-4 py-4 ${i > 0 ? 'border-t border-gray-100' : ''}`}
                   >
                     <div className="w-14 h-20 sm:w-16 sm:h-24 rounded-lg overflow-hidden shrink-0 bg-gray-100">
                       {item.cover_url ? (
-                        <img src={item.cover_url} alt={item.title} className="w-full h-full object-cover" />
+                        <img src={item.cover_url} alt={item.title} className={`w-full h-full object-cover ${noStock ? 'opacity-50' : ''}`} />
                       ) : (
                         <div className="w-full h-full" style={{ background: 'linear-gradient(145deg, #345457, #587F82)' }} />
                       )}
@@ -54,6 +65,11 @@ export default function CarritoPage() {
                       <p className="text-[13px] sm:text-sm font-bold text-gray-800 leading-tight line-clamp-2">{item.title}</p>
                       <p className="text-[12px] text-gray-400 mt-0.5">{item.author_name}</p>
                       <p className="text-sm font-bold mt-1.5" style={{ color: '#345457' }}>{formatPrice(item.price)}</p>
+                      {noStock ? (
+                        <p className="text-[11px] font-semibold mt-1" style={{ color: '#B85C5C' }}>Sin stock — quitalo para continuar</p>
+                      ) : typeof stock === 'number' && stock < item.quantity ? (
+                        <p className="text-[11px] font-semibold mt-1" style={{ color: '#B85C5C' }}>Solo quedan {stock} unidades</p>
+                      ) : null}
                     </div>
 
                     <div className="flex items-center gap-2 shrink-0">
@@ -67,7 +83,8 @@ export default function CarritoPage() {
                       <span className="w-6 text-center text-sm font-medium text-gray-700">{item.quantity}</span>
                       <button
                         onClick={() => updateQuantity(item.bookId, item.quantity + 1)}
-                        className="w-7 h-7 rounded-full border border-gray-200 text-gray-500 hover:border-[#345457] hover:text-[#345457] transition-colors duration-300"
+                        disabled={atCap}
+                        className="w-7 h-7 rounded-full border border-gray-200 text-gray-500 hover:border-[#345457] hover:text-[#345457] transition-colors duration-300 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:border-gray-200 disabled:hover:text-gray-500"
                         aria-label="Sumar cantidad"
                       >
                         +
@@ -82,7 +99,8 @@ export default function CarritoPage() {
                       ✕
                     </button>
                   </div>
-                ))}
+                  );
+                })}
               </div>
 
               {/* Resumen */}
@@ -100,9 +118,16 @@ export default function CarritoPage() {
                   <span>Total</span>
                   <span>{formatPrice(totalPrice)}</span>
                 </div>
+                {hasStockIssue && (
+                  <p className="text-[12px] font-medium text-center mb-3" style={{ color: '#B85C5C' }}>
+                    Ajustá las cantidades marcadas para poder continuar.
+                  </p>
+                )}
                 <Link
                   href="/checkout"
-                  className="block text-center px-5 py-3 rounded-xl text-sm font-semibold text-white hover:opacity-90 transition-opacity"
+                  onClick={e => { if (hasStockIssue) e.preventDefault(); }}
+                  aria-disabled={hasStockIssue}
+                  className={`block text-center px-5 py-3 rounded-xl text-sm font-semibold text-white transition-opacity ${hasStockIssue ? 'opacity-40 cursor-not-allowed' : 'hover:opacity-90'}`}
                   style={{ backgroundColor: '#345457' }}
                 >
                   Continuar al pago

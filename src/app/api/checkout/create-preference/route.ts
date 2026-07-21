@@ -15,20 +15,23 @@ export async function POST(req: NextRequest) {
         province: string;
         postalCode: string;
         reference: string;
+        deliveryMethod?: 'shipping' | 'pickup';
       };
       items: CartItemInput[];
       couponCode?: string;
     };
 
-    if (!customer?.name || !customer?.email || !customer?.address || !customer?.city || !customer?.province || !customer?.postalCode || !customer?.reference) {
+    const isPickup = customer?.deliveryMethod === 'pickup';
+
+    if (!customer?.name || !customer?.email || (!isPickup && (!customer?.address || !customer?.city || !customer?.province || !customer?.postalCode || !customer?.reference))) {
       return NextResponse.json({ error: 'Faltan datos del cliente.' }, { status: 400 });
     }
 
-    const resolved = await resolveOrder(items, couponCode);
+    const resolved = await resolveOrder(items, couponCode, isPickup ? 'pickup' : 'shipping');
     if (!resolved.ok) {
       return NextResponse.json({ error: resolved.error }, { status: 400 });
     }
-    const { orderItems, subtotal, discountAmount, couponCode: appliedCoupon, totalAmount } = resolved.order;
+    const { orderItems, subtotal, discountAmount, couponCode: appliedCoupon, shippingCost, totalAmount } = resolved.order;
 
     const { data: order, error: orderError } = await supabaseAdmin
       .from('orders')
@@ -36,11 +39,13 @@ export async function POST(req: NextRequest) {
         customer_name: customer.name,
         customer_email: customer.email,
         customer_phone: customer.phone || null,
-        shipping_address: customer.address,
-        city: customer.city,
-        province: customer.province,
-        postal_code: customer.postalCode,
-        address_reference: customer.reference,
+        shipping_address: isPickup ? 'Retiro en persona' : customer.address,
+        city: isPickup ? null : customer.city,
+        province: isPickup ? null : customer.province,
+        postal_code: isPickup ? null : customer.postalCode,
+        address_reference: isPickup ? null : customer.reference,
+        delivery_method: isPickup ? 'pickup' : 'shipping',
+        shipping_cost: shippingCost,
         total_amount: totalAmount,
         coupon_code: appliedCoupon,
         discount_amount: discountAmount,
@@ -65,12 +70,18 @@ export async function POST(req: NextRequest) {
     const isProd = !!process.env.NEXT_PUBLIC_SITE_URL && !siteUrl.includes('localhost');
     const notificationUrl = isProd ? `${siteUrl}/api/webhooks/mercadopago` : undefined;
 
+    const bookTotal = Math.round((subtotal - discountAmount) * 100) / 100;
+    const preferenceItems = buildDiscountedPreferenceItems(orderItems, subtotal, bookTotal).map(i => ({
+      ...i,
+      currency_id: 'ARS',
+    }));
+    if (shippingCost > 0) {
+      preferenceItems.push({ id: 'shipping', title: 'Envío', quantity: 1, unit_price: shippingCost, currency_id: 'ARS' });
+    }
+
     const preference = await mpPreference.create({
       body: {
-        items: buildDiscountedPreferenceItems(orderItems, subtotal, totalAmount).map(i => ({
-          ...i,
-          currency_id: 'ARS',
-        })),
+        items: preferenceItems,
         payer: { name: customer.name, email: customer.email },
         back_urls: {
           success: `${siteUrl}/checkout/success?order_id=${order.id}`,

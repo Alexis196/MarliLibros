@@ -9,6 +9,7 @@ export type Author = {
   nationality?: string;
   bio?: string;
   photo_url?: string;
+  featured?: boolean;
 };
 
 const TTL = 10 * 60 * 1000;

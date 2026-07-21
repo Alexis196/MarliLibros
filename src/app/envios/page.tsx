@@ -4,8 +4,9 @@ export default function EnviosPage() {
   return (
     <InfoPage title="Envíos">
       <p>
-        Realizamos envíos a todo el país. El costo y el plazo de entrega se calculan según tu
-        código postal y se muestran antes de confirmar la compra, en el paso de checkout.
+        Realizamos envíos a todo el país con una tarifa fija de $5.000, que se muestra antes de
+        confirmar la compra en el paso de checkout. También podés elegir retirar tu pedido en
+        persona sin costo.
       </p>
 
       <h2>Plazos estimados</h2>

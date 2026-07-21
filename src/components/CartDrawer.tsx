@@ -8,7 +8,11 @@ function formatPrice(price: number) {
 }
 
 export function CartDrawer() {
-  const { items, isDrawerOpen, closeDrawer, removeItem, updateQuantity, totalPrice } = useCart();
+  const { items, isDrawerOpen, closeDrawer, removeItem, updateQuantity, totalPrice, liveStock } = useCart();
+  const hasStockIssue = items.some(i => {
+    const stock = liveStock[i.bookId];
+    return typeof stock === 'number' && i.quantity > stock;
+  });
 
   return (
     <>
@@ -44,11 +48,15 @@ export function CartDrawer() {
         ) : (
           <>
             <div className="flex-1 overflow-y-auto px-5">
-              {items.map((item, i) => (
+              {items.map((item, i) => {
+                const stock = liveStock[item.bookId];
+                const noStock = stock === 0;
+                const atCap = typeof stock === 'number' && item.quantity >= stock;
+                return (
                 <div key={item.bookId} className={`flex items-center gap-3 py-4 ${i > 0 ? 'border-t border-gray-100' : ''}`}>
                   <div className="w-12 h-16 rounded-lg overflow-hidden shrink-0 bg-gray-100">
                     {item.cover_url ? (
-                      <img src={item.cover_url} alt={item.title} className="w-full h-full object-cover" />
+                      <img src={item.cover_url} alt={item.title} className={`w-full h-full object-cover ${noStock ? 'opacity-50' : ''}`} />
                     ) : (
                       <div className="w-full h-full" style={{ background: 'linear-gradient(145deg, #345457, #587F82)' }} />
                     )}
@@ -56,6 +64,11 @@ export function CartDrawer() {
                   <div className="flex-1 min-w-0">
                     <p className="text-[12px] font-bold text-gray-800 leading-tight line-clamp-2">{item.title}</p>
                     <p className="text-[11px] text-gray-400 mt-0.5">{item.author_name}</p>
+                    {noStock ? (
+                      <p className="text-[11px] font-semibold mt-1" style={{ color: '#B85C5C' }}>Sin stock — quitalo para continuar</p>
+                    ) : typeof stock === 'number' && stock < item.quantity ? (
+                      <p className="text-[11px] font-semibold mt-1" style={{ color: '#B85C5C' }}>Solo quedan {stock} unidades</p>
+                    ) : null}
                     <div className="flex items-center justify-between mt-1.5">
                       <div className="flex items-center gap-1.5">
                         <button
@@ -67,7 +80,8 @@ export function CartDrawer() {
                         <span className="w-6 text-center text-[12px] text-gray-700">{item.quantity}</span>
                         <button
                           onClick={() => updateQuantity(item.bookId, item.quantity + 1)}
-                          className="w-7 h-7 rounded-full border border-gray-200 text-gray-500 text-sm hover:border-[#345457] hover:text-[#345457] transition-colors duration-300"
+                          disabled={atCap}
+                          className="w-7 h-7 rounded-full border border-gray-200 text-gray-500 text-sm hover:border-[#345457] hover:text-[#345457] transition-colors duration-300 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:border-gray-200 disabled:hover:text-gray-500"
                         >
                           +
                         </button>
@@ -83,7 +97,8 @@ export function CartDrawer() {
                     ✕
                   </button>
                 </div>
-              ))}
+                );
+              })}
             </div>
 
             <div className="px-5 py-5 border-t border-gray-100">
@@ -99,10 +114,16 @@ export function CartDrawer() {
               >
                 Ver carrito
               </Link>
+              {hasStockIssue && (
+                <p className="text-[11px] font-medium text-center mb-2" style={{ color: '#B85C5C' }}>
+                  Ajustá las cantidades marcadas para poder continuar.
+                </p>
+              )}
               <Link
                 href="/checkout"
-                onClick={closeDrawer}
-                className="block text-center px-5 py-3 rounded-xl text-sm font-semibold text-white hover:opacity-90 transition-opacity"
+                onClick={e => { if (hasStockIssue) e.preventDefault(); else closeDrawer(); }}
+                aria-disabled={hasStockIssue}
+                className={`block text-center px-5 py-3 rounded-xl text-sm font-semibold text-white transition-opacity ${hasStockIssue ? 'opacity-40 cursor-not-allowed' : 'hover:opacity-90'}`}
                 style={{ backgroundColor: '#345457' }}
               >
                 Finalizar compra

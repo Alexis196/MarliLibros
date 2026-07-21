@@ -24,9 +24,11 @@ type Order = {
   province?: string | null;
   postal_code?: string | null;
   address_reference?: string | null;
+  delivery_method?: string | null;
   total_amount: number;
   coupon_code?: string | null;
   discount_amount?: number;
+  shipping_cost?: number;
 };
 
 function formatPrice(price: number) {
@@ -52,14 +54,17 @@ export async function sendOrderConfirmationEmail(order: Order, items: OrderItem[
   const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
   const discountAmount = order.discount_amount ?? 0;
 
+  const isPickup = order.delivery_method === 'pickup';
   const provinceLine = [order.city, order.province, order.postal_code && `CP ${order.postal_code}`].filter(Boolean).join(', ');
-  const addressLines = [
-    order.shipping_address,
-    provinceLine,
-    order.address_reference ? `Referencia: ${order.address_reference}` : '',
-  ]
-    .filter(Boolean)
-    .join('<br/>');
+  const addressLines = isPickup
+    ? 'Retirás tu pedido en el local. Te contactamos para coordinar día y horario.'
+    : [
+        order.shipping_address,
+        provinceLine,
+        order.address_reference ? `Referencia: ${order.address_reference}` : '',
+      ]
+        .filter(Boolean)
+        .join('<br/>');
 
   const discountRow = discountAmount > 0
     ? `<tr>
@@ -71,6 +76,12 @@ export async function sendOrderConfirmationEmail(order: Order, items: OrderItem[
         <td style="text-align:right;font-size:13px;color:#C8A86B;padding-top:4px;">−${formatPrice(discountAmount)}</td>
       </tr>`
     : '';
+
+  const shippingCost = order.shipping_cost ?? 0;
+  const shippingRow = `<tr>
+      <td style="font-size:13px;color:#7A8C8A;padding-top:4px;">Envío</td>
+      <td style="text-align:right;font-size:13px;color:#7A8C8A;padding-top:4px;">${shippingCost > 0 ? formatPrice(shippingCost) : 'Gratis'}</td>
+    </tr>`;
 
   const html = `
     <div style="font-family:Helvetica,Arial,sans-serif;max-width:560px;margin:0 auto;background:#FCFBF8;">
@@ -87,6 +98,7 @@ export async function sendOrderConfirmationEmail(order: Order, items: OrderItem[
         <div style="padding-top:8px;">
           <table style="width:100%;">
             ${discountRow}
+            ${shippingRow}
             <tr style="font-weight:700;color:#345457;">
               <td style="font-size:15px;padding-top:12px;">Total</td>
               <td style="text-align:right;font-size:15px;padding-top:12px;">${formatPrice(order.total_amount)}</td>
@@ -94,7 +106,7 @@ export async function sendOrderConfirmationEmail(order: Order, items: OrderItem[
           </table>
         </div>
         <p style="color:#5b6b69;font-size:13px;line-height:1.6;margin:24px 0 0;">
-          <strong style="color:#1E3134;">Envío a:</strong><br/>${addressLines}
+          <strong style="color:#1E3134;">${isPickup ? 'Retiro' : 'Envío a'}:</strong><br/>${addressLines}
         </p>
         <p style="color:#9aa6a4;font-size:11px;margin:24px 0 0;">N° de pedido: ${order.id}</p>
       </div>
