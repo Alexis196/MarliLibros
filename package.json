@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "create-admin": "node --env-file=.env scripts/create-admin.js"
+    "create-admin": "node --env-file=.env scripts/create-admin.js",
+    "promote-admin": "node --env-file=.env scripts/promote-admin.js"
   },
   "dependencies": {
     "@mercadopago/sdk-react": "^1.0.7",

@@ -4,6 +4,10 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { createSupabaseBrowserClient } from '@/lib/supabase-browser';
 
+// Google OAuth todavía no está configurado en Supabase/Google Cloud Console.
+// Cuando esté listo, cambiar a true reactiva el botón sin tocar el resto del flujo.
+const GOOGLE_LOGIN_ENABLED = false;
+
 function GoogleIcon() {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24">
@@ -135,21 +139,25 @@ export default function LoginPage() {
             </button>
           </form>
 
-          <div className="flex items-center gap-3 my-5">
-            <div className="flex-1 h-px bg-gray-100" />
-            <span className="text-[11px] text-gray-400">o</span>
-            <div className="flex-1 h-px bg-gray-100" />
-          </div>
+          {GOOGLE_LOGIN_ENABLED && (
+            <>
+              <div className="flex items-center gap-3 my-5">
+                <div className="flex-1 h-px bg-gray-100" />
+                <span className="text-[11px] text-gray-400">o</span>
+                <div className="flex-1 h-px bg-gray-100" />
+              </div>
 
-          <button
-            type="button"
-            onClick={handleGoogleLogin}
-            disabled={googleLoading}
-            className="w-full flex items-center justify-center gap-2.5 px-5 py-2.5 rounded-xl text-sm font-semibold text-gray-600 border border-gray-200 hover:bg-gray-50 transition-colors duration-300 disabled:opacity-60"
-          >
-            <GoogleIcon />
-            {googleLoading ? 'Redirigiendo…' : 'Continuar con Google'}
-          </button>
+              <button
+                type="button"
+                onClick={handleGoogleLogin}
+                disabled={googleLoading}
+                className="w-full flex items-center justify-center gap-2.5 px-5 py-2.5 rounded-xl text-sm font-semibold text-gray-600 border border-gray-200 hover:bg-gray-50 transition-colors duration-300 disabled:opacity-60"
+              >
+                <GoogleIcon />
+                {googleLoading ? 'Redirigiendo…' : 'Continuar con Google'}
+              </button>
+            </>
+          )}
         </div>
       </div>
     </main>
