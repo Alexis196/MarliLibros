@@ -18,21 +18,9 @@ const PAYMENT_METHODS = [
 const FOOTER_CATEGORIES_LIMIT = 6;
 
 const FOOTER_LINKS: Record<string, { label: string; href: string }[]> = {
-  Institucional: [
-    { label: 'Nosotros', href: '/nosotros' },
-    { label: 'Preguntas frecuentes', href: '/faq' },
-    { label: 'Formas de pago', href: '/formas-de-pago' },
-    { label: 'Envíos', href: '/envios' },
-    { label: 'Cambios y devoluciones', href: '/terminos' },
-  ],
   Categorías: [
     ...CATEGORY_NAMES.slice(0, FOOTER_CATEGORIES_LIMIT).map(cat => ({ label: cat, href: `/catalogo?categoria=${encodeURIComponent(cat)}` })),
     { label: 'Ver todas →', href: '/catalogo' },
-  ],
-  Información: [
-    { label: 'Términos y condiciones', href: '/terminos' },
-    { label: 'Política de privacidad', href: '/privacidad' },
-    { label: 'Libro de quejas', href: '/libro-de-quejas' },
   ],
 };
 
@@ -40,8 +28,8 @@ export function Footer() {
   return (
     <footer style={{ backgroundColor: '#1E3134' }} className="text-white pt-12 sm:pt-14 pb-6 mt-auto">
       <div className="max-w-7xl mx-auto px-4 sm:px-6">
-        <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-5 gap-8 mb-10">
-          <div className="col-span-2 lg:col-span-1">
+        <div className="flex flex-col lg:flex-row lg:items-start gap-10 lg:gap-24 mb-10">
+          <div className="lg:max-w-xs">
             <div className="mb-3">
               <Image src="/logo.png" alt="Marli Libros" width={140} height={46} style={{ objectFit: 'contain', height: '40px', width: 'auto', filter: 'brightness(0) invert(1)' }} />
             </div>
@@ -77,29 +65,31 @@ export function Footer() {
             )}
           </div>
 
-          {Object.entries(FOOTER_LINKS).map(([title, items]) => (
-            <div key={title}>
-              <h4 className="font-bold text-[13px] mb-4">{title}</h4>
-              <ul className="space-y-2">
-                {items.map(item => (
-                  <li key={item.label}>
-                    <Link href={item.href} className="text-[12px] text-white/55 hover:text-white transition-colors">{item.label}</Link>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ))}
+          <div className="grid grid-cols-2 sm:flex sm:gap-16 gap-8">
+            {Object.entries(FOOTER_LINKS).map(([title, items]) => (
+              <div key={title}>
+                <h4 className="font-bold text-[13px] mb-4">{title}</h4>
+                <ul className="space-y-2">
+                  {items.map(item => (
+                    <li key={item.label}>
+                      <Link href={item.href} className="text-[12px] text-white/55 hover:text-white transition-colors">{item.label}</Link>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
 
-          <div>
-            <h4 className="font-bold text-[13px] mb-4">Medios de pago</h4>
-            <div className="flex flex-wrap gap-2 mb-3">
-              {PAYMENT_METHODS.map(({ name, src, width, height, bg }) => (
-                <span key={name} aria-label={name} title={name} className="flex items-center justify-center px-2.5 py-1.5 rounded" style={{ backgroundColor: bg }}>
-                  <Image src={src} alt={name} width={width} height={height} style={{ objectFit: 'contain' }} />
-                </span>
-              ))}
+            <div>
+              <h4 className="font-bold text-[13px] mb-4">Medios de pago</h4>
+              <div className="flex flex-wrap gap-2 mb-3">
+                {PAYMENT_METHODS.map(({ name, src, width, height, bg }) => (
+                  <span key={name} aria-label={name} title={name} className="flex items-center justify-center px-2.5 py-1.5 rounded" style={{ backgroundColor: bg }}>
+                    <Image src={src} alt={name} width={width} height={height} style={{ objectFit: 'contain' }} />
+                  </span>
+                ))}
+              </div>
+              <p className="text-[12px] text-white/55">Transferencia bancaria</p>
             </div>
-            <p className="text-[12px] text-white/55">Transferencia bancaria</p>
           </div>
         </div>
 

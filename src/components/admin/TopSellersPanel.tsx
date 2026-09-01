@@ -54,7 +54,7 @@ function RankedList({ title, items, loading }: { title: string; items: TopSeller
   const max = items.length > 0 ? items[0].quantity : 0;
 
   return (
-    <div>
+    <div className="min-w-0">
       <h3 className="text-sm font-bold mb-3" style={{ color: '#345457' }}>{title}</h3>
       {loading ? (
         <div className="space-y-3">

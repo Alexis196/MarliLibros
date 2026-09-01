@@ -12,6 +12,19 @@
   --font-mono: var(--font-geist-mono);
 }
 
+html, body {
+  overflow-x: hidden;
+}
+
+/* La barra de navegación inferior fija del admin (mobile, ver AdminSidebar) tapa
+   cualquier campo hacia el que el navegador haga scroll automático (foco por
+   teclado, validación de formulario) si no se reserva su alto como margen. */
+@media (max-width: 639px) {
+  html {
+    scroll-padding-bottom: 6rem;
+  }
+}
+
 body {
   background: #F7F9F8;
   color: var(--foreground);
