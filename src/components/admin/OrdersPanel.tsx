@@ -231,7 +231,12 @@ function OrderRow({ order, isFirst, selected, onSelect, onOpenPanel, onApprove, 
         </span>
 
         {/* Status */}
-        <StatusBadge status={order.status} shipped={order.shipped} />
+        <span className="flex items-center gap-1 min-w-0">
+          <StatusBadge status={order.status} shipped={order.shipped} />
+          {order.stock_warning && (
+            <span title={order.stock_warning} className="shrink-0" style={{ fontSize: '13px' }}>⚠️</span>
+          )}
+        </span>
 
         {/* Time */}
         <span className={`text-[12px] ${isUrgent ? 'text-amber-500 font-medium' : 'text-gray-400'}`}>
@@ -309,6 +314,7 @@ function OrderRow({ order, isFirst, selected, onSelect, onOpenPanel, onApprove, 
           </div>
           <div className="flex items-center gap-2 mt-0.5 flex-wrap">
             <StatusBadge status={order.status} shipped={order.shipped} />
+            {order.stock_warning && <span title={order.stock_warning}>⚠️</span>}
             <span className="text-[11px] text-gray-400">{formatRelative(order.created_at)}</span>
             {order.delivery_method === 'pickup' ? (
               <span className="text-[11px] text-gray-400">🏬 Retiro en persona</span>
@@ -406,6 +412,15 @@ function SidePanel({ order, onClose, onApprove, onShip, onReject, updatingId }: 
           </span>
         )}
       </div>
+
+      {order.stock_warning && (
+        <div className="mx-5 mt-3 px-3 py-2.5 rounded-xl flex items-start gap-2 shrink-0" style={{ backgroundColor: 'rgba(184,92,92,0.08)' }}>
+          <span className="text-[13px] leading-none mt-0.5">⚠️</span>
+          <p className="text-[12px] leading-snug" style={{ color: '#B85C5C' }}>
+            {order.stock_warning}. Contactá al cliente o revisá el stock antes de despachar.
+          </p>
+        </div>
+      )}
 
       {/* Scrollable body */}
       <div className="flex-1 overflow-y-auto p-5 space-y-6">
@@ -783,9 +798,9 @@ export function OrdersPanel({ initialDispatchOnly, stats }: { initialDispatchOnl
 
   const updateStatus = async (id: string, status: string) => {
     setUpdatingId(id);
-    const ok = await updateStatusCtx(id, status);
+    const { ok, stockWarning } = await updateStatusCtx(id, status);
     if (ok) {
-      setOrders(prev => prev.map(o => o.id === id ? { ...o, status } : o));
+      setOrders(prev => prev.map(o => o.id === id ? { ...o, status, ...(stockWarning !== undefined && { stock_warning: stockWarning }) } : o));
       router.refresh();
     }
     setUpdatingId(null);

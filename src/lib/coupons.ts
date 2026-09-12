@@ -16,7 +16,7 @@ export async function validateCoupon(rawCode: string, subtotal: number): Promise
 
   const { data: coupon } = await supabaseAdmin
     .from('coupons')
-    .select('*')
+    .select('code, discount_type, discount_value, active, expires_at, min_purchase, max_uses, used_count')
     .eq('code', code)
     .maybeSingle();
 

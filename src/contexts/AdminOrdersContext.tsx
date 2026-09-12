@@ -20,6 +20,7 @@ export type AdminOrder = {
   payment_method?: string | null;
   total_amount: number;
   shipped: boolean;
+  stock_warning?: string | null;
   created_at: string;
   order_items: OrderItem[];
 };
@@ -47,7 +48,7 @@ let cache: OrdersCache = { all: null, dispatch: null };
 type Ctx = {
   getOrders: (params: FetchOrdersParams) => Promise<OrdersResult>;
   markShipped: (id: string) => Promise<boolean>;
-  updateStatus: (id: string, status: string) => Promise<boolean>;
+  updateStatus: (id: string, status: string) => Promise<{ ok: boolean; stockWarning?: string | null }>;
   bulkUpdateStatus: (ids: string[], status: string) => Promise<boolean>;
   bulkMarkShipped: (ids: string[]) => Promise<boolean>;
 };
@@ -105,19 +106,27 @@ export function AdminOrdersProvider({ children }: { children: ReactNode }) {
     return res.ok;
   }, []);
 
-  const updateStatus = useCallback(async (id: string, status: string): Promise<boolean> => {
+  const updateStatus = useCallback(async (id: string, status: string): Promise<{ ok: boolean; stockWarning?: string | null }> => {
     const res = await fetch(`/api/admin/orders/${id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ status }),
     });
-    if (res.ok) {
-      const apply = (list: AdminOrder[]) => list.map(o => o.id === id ? { ...o, status } : o);
-      if (cache.all) cache = { ...cache, all: { ...cache.all, data: apply(cache.all.data) } };
-      if (cache.dispatch) cache = { ...cache, dispatch: { ...cache.dispatch, data: apply(cache.dispatch.data) } };
-      invalidateAdminStats();
-    }
-    return res.ok;
+    if (!res.ok) return { ok: false };
+
+    // Al aprobar, el server ya recalculó stock_warning (si algún libro se quedó sin
+    // stock suficiente) — lo propagamos acá para que se vea al toque, no recién en
+    // el próximo refetch (la caché dura 2 minutos).
+    const data = await res.json().catch(() => null);
+    const stockWarning: string | null | undefined = data?.order?.stock_warning;
+
+    const apply = (list: AdminOrder[]) =>
+      list.map(o => o.id === id ? { ...o, status, ...(stockWarning !== undefined && { stock_warning: stockWarning }) } : o);
+    if (cache.all) cache = { ...cache, all: { ...cache.all, data: apply(cache.all.data) } };
+    if (cache.dispatch) cache = { ...cache, dispatch: { ...cache.dispatch, data: apply(cache.dispatch.data) } };
+    invalidateAdminStats();
+
+    return { ok: true, stockWarning };
   }, []);
 
   const bulkUpdateStatus = useCallback(async (ids: string[], status: string): Promise<boolean> => {

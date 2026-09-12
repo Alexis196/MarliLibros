@@ -16,7 +16,7 @@ export async function GET(req: NextRequest) {
 
   const search = req.nextUrl.searchParams.get('search')?.trim() ?? '';
 
-  let query = supabaseAdmin.from('authors').select('*').order('name');
+  let query = supabaseAdmin.from('authors').select('id, name, nationality, bio, photo_url, featured, created_at').order('name');
   if (search) query = query.ilike('name', `%${search}%`);
 
   const { data, error } = await query;

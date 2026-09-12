@@ -28,9 +28,14 @@ export async function GET(req: NextRequest) {
     bookOrderIds = [...new Set((itemMatches ?? []).map((i: { order_id: string }) => i.order_id))];
   }
 
+  // Solo las columnas que el panel (OrdersPanel / AdminOrder) realmente usa —
+  // deja afuera mp_payment_id, mp_status_detail, mp_preference_id, email_sent, etc.
   let query = supabaseAdmin
     .from('orders')
-    .select('*, order_items(*)', { count: 'exact' })
+    .select(
+      'id, status, customer_name, customer_email, customer_phone, shipping_address, city, province, postal_code, address_reference, delivery_method, payment_method, total_amount, shipped, stock_warning, created_at, order_items(title, author_name, price, quantity)',
+      { count: 'exact' }
+    )
     .order('created_at', { ascending: false })
     .range(offset, offset + limit - 1);
 

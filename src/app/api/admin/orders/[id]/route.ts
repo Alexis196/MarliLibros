@@ -46,6 +46,11 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   // conteo de cupón. finalizeApprovedOrder es idempotente, así que repetir no duplica nada.
   if (update.status === 'approved') {
     await finalizeApprovedOrder(id);
+    // finalizeApprovedOrder puede haber marcado stock_warning después de que ya
+    // leímos `data` arriba — lo volvemos a pedir para que la respuesta (y con
+    // ella el panel) lo refleje al toque, sin esperar al próximo refetch.
+    const { data: fresh } = await supabaseAdmin.from('orders').select('stock_warning').eq('id', id).single();
+    if (fresh) data.stock_warning = fresh.stock_warning;
   }
 
   return NextResponse.json({ order: data });

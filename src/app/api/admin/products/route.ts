@@ -21,11 +21,11 @@ export async function GET(req: NextRequest) {
       { count: newProducts },
       { count: drafts },
     ] = await Promise.all([
-      supabaseAdmin.from('books').select('*', { count: 'exact', head: true }),
-      supabaseAdmin.from('books').select('*', { count: 'exact', head: true }).eq('status', 'published'),
-      supabaseAdmin.from('books').select('*', { count: 'exact', head: true }).eq('stock', 0),
-      supabaseAdmin.from('books').select('*', { count: 'exact', head: true }).gt('new_until', now),
-      supabaseAdmin.from('books').select('*', { count: 'exact', head: true }).eq('status', 'draft'),
+      supabaseAdmin.from('books').select('id', { count: 'exact', head: true }),
+      supabaseAdmin.from('books').select('id', { count: 'exact', head: true }).eq('status', 'published'),
+      supabaseAdmin.from('books').select('id', { count: 'exact', head: true }).eq('stock', 0),
+      supabaseAdmin.from('books').select('id', { count: 'exact', head: true }).gt('new_until', now),
+      supabaseAdmin.from('books').select('id', { count: 'exact', head: true }).eq('status', 'draft'),
     ]);
     return NextResponse.json({
       total: total ?? 0,
@@ -48,9 +48,15 @@ export async function GET(req: NextRequest) {
   const limit       = Math.min(Number(sp.get('limit') ?? '40'), 100);
   const offset      = Number(sp.get('offset') ?? '0');
 
+  // Solo las columnas que la fila de la lista (ProductRow) y la exportación CSV usan —
+  // description, cost_price, tags, binding, edition, etc. quedan afuera (solo hacen
+  // falta en el formulario de edición, que pide el producto individual completo aparte).
   let query = supabaseAdmin
     .from('books')
-    .select('*', { count: 'exact' })
+    .select(
+      'id, title, author_name, category, price, promotional_price, status, cover_url, new_until, featured, stock, publisher, isbn, sku',
+      { count: 'exact' }
+    )
     .order(sort, { ascending })
     .range(offset, offset + limit - 1);
 

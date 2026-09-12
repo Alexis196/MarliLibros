@@ -53,7 +53,7 @@ function ReviewsSection({ bookId }: { bookId: string }) {
     setLoading(true);
     supabase
       .from('reviews')
-      .select('*')
+      .select('id, reviewer_name, rating, comment, created_at')
       .eq('book_id', bookId)
       .order('created_at', { ascending: false })
       .then(({ data }) => {

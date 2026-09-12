@@ -13,6 +13,7 @@ export type Author = {
 };
 
 const TTL = 10 * 60 * 1000;
+const AUTHOR_COLUMNS = 'id, name, nationality, bio, photo_url, featured';
 
 type CachedList = { list: Author[]; byId: Map<string, Author>; fetchedAt: number };
 
@@ -43,7 +44,7 @@ export function AuthorsProvider({ children }: { children: ReactNode }) {
 
     supabase
       .from('authors')
-      .select('*')
+      .select(AUTHOR_COLUMNS)
       .order('name')
       .then(({ data: rows }) => {
         const list = (rows ?? []) as Author[];
@@ -75,7 +76,7 @@ export function useAuthors() {
 export async function fetchAuthorById(id: string): Promise<Author | null> {
   if (listCache?.byId.has(id)) return listCache.byId.get(id)!;
   if (singleCache.has(id)) return singleCache.get(id)!;
-  const { data } = await supabase.from('authors').select('*').eq('id', id).single();
+  const { data } = await supabase.from('authors').select(AUTHOR_COLUMNS).eq('id', id).single();
   if (data) singleCache.set(data.id, data as Author);
   return (data as Author | null) ?? null;
 }

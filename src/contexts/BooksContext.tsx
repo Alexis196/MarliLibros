@@ -6,6 +6,11 @@ import type { Book } from '@/components/BookCard';
 
 const TTL = 5 * 60 * 1000;
 
+// Solo las columnas que BookCard / la página de detalle realmente leen (evita traer
+// cost_price, isbn, sku, tags, etc. — columnas de gestión que no se usan en la tienda).
+const BOOK_COLUMNS =
+  'id, title, author_name, category, price, promotional_price, status, description, cover_url, new_until, rating, pages, year, featured, stock';
+
 type Cached<T> = { data: T; fetchedAt: number };
 
 function isStale<T>(entry: Cached<T> | undefined): boolean {
@@ -36,7 +41,7 @@ export function BooksProvider({ children }: { children: ReactNode }) {
   const getBook = useCallback(async (id: string): Promise<Book | null> => {
     const cached = singleCache.get(id);
     if (!isStale(cached)) return cached!.data;
-    const { data } = await supabase.from('books').select('*').eq('id', id).eq('status', 'published').maybeSingle();
+    const { data } = await supabase.from('books').select(BOOK_COLUMNS).eq('id', id).eq('status', 'published').maybeSingle();
     if (data) singleCache.set(id, { data: data as Book, fetchedAt: Date.now() });
     return (data as Book | null) ?? null;
   }, []);
@@ -54,7 +59,7 @@ export function BooksProvider({ children }: { children: ReactNode }) {
     }
 
     if (misses.length > 0) {
-      const { data } = await supabase.from('books').select('*').in('id', misses).eq('status', 'published');
+      const { data } = await supabase.from('books').select(BOOK_COLUMNS).in('id', misses).eq('status', 'published');
       for (const b of (data ?? []) as Book[]) {
         singleCache.set(b.id, { data: b, fetchedAt: now });
         hits.push(b);
@@ -70,7 +75,7 @@ export function BooksProvider({ children }: { children: ReactNode }) {
     if (!isStale(cached)) return cached!.data;
     const { data } = await supabase
       .from('books')
-      .select('*')
+      .select(BOOK_COLUMNS)
       .eq('status', 'published')
       .eq('category', category)
       .neq('id', excludeId)
@@ -85,7 +90,7 @@ export function BooksProvider({ children }: { children: ReactNode }) {
     if (!isStale(cached)) return cached!.data;
     const { data } = await supabase
       .from('books')
-      .select('*')
+      .select(BOOK_COLUMNS)
       .eq('status', 'published')
       .eq('author_name', authorName)
       .order('created_at', { ascending: false });

@@ -140,7 +140,7 @@ export async function getMonthlySummary(year: number): Promise<MonthlyPoint[]> {
   const [{ data: orders }, { data: expenses }, { data: shippedOrders }] = await Promise.all([
     supabaseAdmin.from('orders').select('total_amount, created_at').eq('status', 'approved').gte('created_at', start).lt('created_at', end),
     supabaseAdmin.from('expenses').select('amount, expense_date').gte('expense_date', start).lt('expense_date', end),
-    supabaseAdmin.from('orders').select('*').eq('shipped', true).gte('created_at', start).lt('created_at', end),
+    supabaseAdmin.from('orders').select('shipped_at, created_at').eq('shipped', true).gte('created_at', start).lt('created_at', end),
   ]);
 
   const points: MonthlyPoint[] = Array.from({ length: 12 }, (_, i) => ({ month: i + 1, ventas: 0, gastos: 0, envios: 0 }));
@@ -170,7 +170,7 @@ export async function getAnnualSummary(yearsBack = 5): Promise<AnnualPoint[]> {
   const [{ data: orders }, { data: expenses }, { data: shippedOrders }] = await Promise.all([
     supabaseAdmin.from('orders').select('total_amount, created_at').eq('status', 'approved').gte('created_at', start),
     supabaseAdmin.from('expenses').select('amount, expense_date').gte('expense_date', start),
-    supabaseAdmin.from('orders').select('*').eq('shipped', true).gte('created_at', start),
+    supabaseAdmin.from('orders').select('shipped_at, created_at').eq('shipped', true).gte('created_at', start),
   ]);
 
   const points = new Map<number, AnnualPoint>();

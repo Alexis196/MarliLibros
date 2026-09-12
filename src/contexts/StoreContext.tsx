@@ -9,6 +9,11 @@ const NOVEDADES_LIMIT = 12;
 const FEATURED_LIMIT = 12;
 const TTL = 5 * 60 * 1000;
 
+// Solo las columnas que BookCard / la página de detalle realmente leen (evita traer
+// cost_price, isbn, sku, tags, etc. — columnas de gestión que no se usan en la tienda).
+const BOOK_COLUMNS =
+  'id, title, author_name, category, price, promotional_price, status, description, cover_url, new_until, rating, pages, year, featured, stock';
+
 type StoreData = {
   novedades: Book[];
   featuredBooks: Book[];
@@ -45,8 +50,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     const now = new Date().toISOString();
 
     Promise.all([
-      supabase.from('books').select('*').eq('status', 'published').gt('new_until', now).order('created_at', { ascending: false }).limit(NOVEDADES_LIMIT),
-      supabase.from('books').select('*').eq('status', 'published').eq('featured', true).order('created_at', { ascending: false }).limit(FEATURED_LIMIT),
+      supabase.from('books').select(BOOK_COLUMNS).eq('status', 'published').gt('new_until', now).order('created_at', { ascending: false }).limit(NOVEDADES_LIMIT),
+      supabase.from('books').select(BOOK_COLUMNS).eq('status', 'published').eq('featured', true).order('created_at', { ascending: false }).limit(FEATURED_LIMIT),
       supabase.from('books').select('id', { count: 'exact', head: true }).eq('status', 'published'),
       Promise.all(
         CATEGORY_NAMES.map(name =>
@@ -63,7 +68,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (featured.length === 0) {
         const { data: recent } = await supabase
           .from('books')
-          .select('*')
+          .select(BOOK_COLUMNS)
           .eq('status', 'published')
           .order('created_at', { ascending: false })
           .limit(FEATURED_LIMIT);
