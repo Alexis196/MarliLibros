@@ -39,9 +39,9 @@ function exportToCSV(orders: AdminOrder[], filename: string) {
     return [
       toShortId(o.id),
       o.customer_name,
-      o.customer_email,
+      o.customer_email ?? '',
       o.customer_phone ?? '',
-      o.delivery_method === 'pickup' ? 'Retiro en persona' : 'Envío a domicilio',
+      o.delivery_method === 'pickup' ? 'Retiro en persona' : o.delivery_method === 'cash' ? 'Efectivo' : 'Envío a domicilio',
       o.shipping_address,
       o.city ?? '',
       o.province ?? '',
@@ -205,12 +205,16 @@ function OrderRow({ order, isFirst, selected, onSelect, onOpenPanel, onApprove, 
             {order.customer_name}
             {isPremium && <span title="Pedido premium" style={{ color: '#C8A86B', fontSize: '8px' }}>●</span>}
           </p>
-          <p className="text-[11px] text-gray-400 truncate">{order.customer_email}</p>
+          <p className="text-[11px] text-gray-400 truncate">{order.customer_email ?? order.customer_phone}</p>
         </div>
 
         {/* Destino */}
         <span className="text-[12px] text-gray-500 truncate">
-          {order.delivery_method === 'pickup' ? '🏬 Retiro en persona' : [order.city, order.province].filter(Boolean).join(', ') || '—'}
+          {order.delivery_method === 'pickup'
+            ? '🏬 Retiro en persona'
+            : order.delivery_method === 'cash'
+            ? '💵 Efectivo'
+            : [order.city, order.province].filter(Boolean).join(', ') || '—'}
         </span>
 
         {/* Items */}
@@ -308,6 +312,8 @@ function OrderRow({ order, isFirst, selected, onSelect, onOpenPanel, onApprove, 
             <span className="text-[11px] text-gray-400">{formatRelative(order.created_at)}</span>
             {order.delivery_method === 'pickup' ? (
               <span className="text-[11px] text-gray-400">🏬 Retiro en persona</span>
+            ) : order.delivery_method === 'cash' ? (
+              <span className="text-[11px] text-gray-400">💵 Efectivo</span>
             ) : (order.city || order.province) && (
               <span className="text-[11px] text-gray-400">{[order.city, order.province].filter(Boolean).join(', ')}</span>
             )}
@@ -408,12 +414,14 @@ function SidePanel({ order, onClose, onApprove, onShip, onReject, updatingId }: 
           <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest mb-2">Cliente</p>
           <p className="text-[14px] font-semibold text-gray-800">{order.customer_name}</p>
           <div className="mt-2 flex flex-wrap gap-2">
-            <a
-              href={`mailto:${order.customer_email}`}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium border border-gray-200 text-gray-600 hover:border-[#345457] hover:text-[#345457] transition-all duration-200"
-            >
-              ✉ {order.customer_email}
-            </a>
+            {order.customer_email && (
+              <a
+                href={`mailto:${order.customer_email}`}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium border border-gray-200 text-gray-600 hover:border-[#345457] hover:text-[#345457] transition-all duration-200"
+              >
+                ✉ {order.customer_email}
+              </a>
+            )}
             {order.customer_phone && (
               <a
                 href={`tel:${order.customer_phone}`}
@@ -439,10 +447,15 @@ function SidePanel({ order, onClose, onApprove, onShip, onReject, updatingId }: 
         {/* Shipping */}
         <div>
           <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest mb-2">
-            {order.delivery_method === 'pickup' ? 'Retiro' : 'Envío'}
+            {order.delivery_method === 'pickup' ? 'Retiro' : order.delivery_method === 'cash' ? 'Entrega (efectivo)' : 'Envío'}
           </p>
           {order.delivery_method === 'pickup' ? (
             <p className="text-[13px] text-gray-700">🏬 Retira en el local — coordinar por email o WhatsApp.</p>
+          ) : order.delivery_method === 'cash' ? (
+            <>
+              <p className="text-[13px] text-gray-700">💵 Efectivo o transferencia — coordinar por WhatsApp.</p>
+              <p className="text-[13px] text-gray-700 mt-1">{order.shipping_address}</p>
+            </>
           ) : (
             <>
               <p className="text-[13px] text-gray-700">{order.shipping_address}</p>

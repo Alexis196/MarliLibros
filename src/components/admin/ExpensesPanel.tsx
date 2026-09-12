@@ -171,35 +171,32 @@ function MetricCard({
   );
 }
 
-// ─── Delete Popover ───────────────────────────────────────────────────────────
-function DeletePopover({
+// ─── Delete confirm modal ───────────────────────────────────────────────────────
+// Modal centrado (fixed) en vez de popover anclado al botón: anclado, el
+// overflow-hidden de la card que redondea la lista lo recortaba y quedaba invisible.
+function DeleteConfirmModal({
   onConfirm, onCancel, loading,
 }: { onConfirm: () => void; onCancel: () => void; loading: boolean }) {
-  const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    function h(e: MouseEvent) { if (ref.current && !ref.current.contains(e.target as Node)) onCancel(); }
-    document.addEventListener('mousedown', h);
-    return () => document.removeEventListener('mousedown', h);
-  }, [onCancel]);
-
   return (
-    <div
-      ref={ref}
-      className="absolute right-0 top-8 z-30 w-56 rounded-xl bg-white p-3"
-      style={{ boxShadow: '0 8px 32px rgba(52,84,87,0.14)', border: '1px solid #F3F4F6' }}
-    >
-      <p className="text-sm font-semibold text-gray-800 mb-1">¿Eliminar este gasto?</p>
-      <p className="text-[11px] text-gray-400 mb-3">Esta acción no se puede deshacer.</p>
-      <div className="flex gap-2">
-        <button type="button" onClick={onCancel}
-          className="flex-1 rounded-lg border border-gray-200 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50 transition-colors cursor-pointer">
-          Cancelar
-        </button>
-        <button type="button" onClick={onConfirm} disabled={loading}
-          className="flex-1 rounded-lg py-1.5 text-xs font-semibold text-white disabled:opacity-60 cursor-pointer hover:opacity-90 transition-opacity"
-          style={{ background: '#B85C5C' }}>
-          {loading ? 'Eliminando…' : 'Eliminar'}
-        </button>
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4" style={{ background: 'rgba(28,43,44,0.35)' }} onMouseDown={onCancel}>
+      <div
+        onMouseDown={e => e.stopPropagation()}
+        className="w-full max-w-sm rounded-xl bg-white p-4"
+        style={{ boxShadow: '0 20px 48px rgba(0,0,0,0.25)' }}
+      >
+        <p className="text-sm font-semibold text-gray-800 mb-1">¿Eliminar este gasto?</p>
+        <p className="text-[11px] text-gray-400 mb-3">Esta acción no se puede deshacer.</p>
+        <div className="flex gap-2">
+          <button type="button" onClick={onCancel}
+            className="flex-1 rounded-lg border border-gray-200 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50 transition-colors cursor-pointer">
+            Cancelar
+          </button>
+          <button type="button" onClick={onConfirm} disabled={loading}
+            className="flex-1 rounded-lg py-1.5 text-xs font-semibold text-white disabled:opacity-60 cursor-pointer hover:opacity-90 transition-opacity"
+            style={{ background: '#B85C5C' }}>
+            {loading ? 'Eliminando…' : 'Eliminar'}
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -791,17 +788,15 @@ function ExpenseRow({
           className="p-1.5 rounded-lg hover:bg-white text-gray-400 hover:text-[#345457] transition-colors cursor-pointer text-sm">✏️</button>
         <button type="button" onClick={onDuplicate} title="Duplicar"
           className="p-1.5 rounded-lg hover:bg-white text-gray-400 hover:text-[#345457] transition-colors cursor-pointer text-sm">📋</button>
-        <div className="relative">
-          <button type="button" onClick={() => setShowDel(true)} title="Eliminar"
-            className="p-1.5 rounded-lg hover:bg-white text-gray-400 hover:text-red-400 transition-colors cursor-pointer text-sm">🗑️</button>
-          {showDel && (
-            <DeletePopover
-              onConfirm={onDelete}
-              onCancel={() => setShowDel(false)}
-              loading={deleting}
-            />
-          )}
-        </div>
+        <button type="button" onClick={() => setShowDel(true)} title="Eliminar"
+          className="p-1.5 rounded-lg hover:bg-white text-gray-400 hover:text-red-400 transition-colors cursor-pointer text-sm">🗑️</button>
+        {showDel && (
+          <DeleteConfirmModal
+            onConfirm={onDelete}
+            onCancel={() => setShowDel(false)}
+            loading={deleting}
+          />
+        )}
       </div>
     </div>
   );

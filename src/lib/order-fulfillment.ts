@@ -21,10 +21,13 @@ export async function finalizeApprovedOrder(orderId: string) {
 
   await decrementStock(items ?? []);
 
-  try {
-    await sendOrderConfirmationEmail(order, items ?? []);
-  } catch (err) {
-    console.error('sendOrderConfirmationEmail failed for order', orderId, err);
+  // Los pedidos en efectivo no piden email: no hay a quién mandarle la confirmación.
+  if (order.customer_email) {
+    try {
+      await sendOrderConfirmationEmail(order, items ?? []);
+    } catch (err) {
+      console.error('sendOrderConfirmationEmail failed for order', orderId, err);
+    }
   }
   await supabaseAdmin.from('orders').update({ email_sent: true }).eq('id', orderId);
 

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 import { useAdminAuthors, type AdminAuthor } from '@/contexts/AdminAuthorsContext';
 
@@ -19,33 +19,32 @@ function SkeletonRow() {
   );
 }
 
-// ─── Delete popover ───────────────────────────────────────────────────────────
-function DeletePopover({ name, onConfirm, onCancel }: { name: string; onConfirm: () => void; onCancel: () => void }) {
-  const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const handler = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) onCancel(); };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [onCancel]);
+// ─── Delete confirm modal ───────────────────────────────────────────────────────
+// Modal centrado (fixed) en vez de popover anclado al botón: anclado, el
+// overflow-hidden de la card que redondea la lista lo recortaba y quedaba invisible.
+function DeleteConfirmModal({ name, onConfirm, onCancel }: { name: string; onConfirm: () => void; onCancel: () => void }) {
   return (
-    <div ref={ref} className="absolute right-0 top-full mt-1 z-50 w-72 rounded-xl bg-white border border-gray-200 shadow-xl p-4" style={{ boxShadow: '0 8px 32px rgba(52,84,87,0.15)' }}>
-      <p className="text-sm text-gray-700 mb-3">¿Eliminar <span className="font-semibold">"{name}"</span>? Esta acción no se puede deshacer.</p>
-      <div className="flex gap-2">
-        <button onClick={onCancel} className="flex-1 py-1.5 rounded-lg text-sm text-gray-500 border border-gray-200 hover:border-gray-300 transition-colors">Cancelar</button>
-        <button onClick={onConfirm} className="flex-1 py-1.5 rounded-lg text-sm font-semibold text-white transition-opacity hover:opacity-90" style={{ background: '#B85C5C' }}>Eliminar</button>
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4" style={{ background: 'rgba(28,43,44,0.35)' }} onMouseDown={onCancel}>
+      <div
+        onMouseDown={e => e.stopPropagation()}
+        className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-xl"
+        style={{ boxShadow: '0 20px 48px rgba(0,0,0,0.25)' }}
+      >
+        <p className="text-sm text-gray-700 mb-4">¿Eliminar <span className="font-semibold">"{name}"</span>? Esta acción no se puede deshacer.</p>
+        <div className="flex gap-2">
+          <button onClick={onCancel} className="flex-1 py-1.5 rounded-lg text-sm text-gray-500 border border-gray-200 hover:border-gray-300 transition-colors">Cancelar</button>
+          <button onClick={onConfirm} className="flex-1 py-1.5 rounded-lg text-sm font-semibold text-white transition-opacity hover:opacity-90" style={{ background: '#B85C5C' }}>Eliminar</button>
+        </div>
       </div>
     </div>
   );
 }
 
 // ─── Author row ───────────────────────────────────────────────────────────────
-function AuthorRow({ author, onFeaturedToggle, onDeleteRequest, deleteConfirmId, onDeleteConfirm, onDeleteCancel, updatingId }: {
+function AuthorRow({ author, onFeaturedToggle, onDeleteRequest, updatingId }: {
   author: AdminAuthor;
   onFeaturedToggle: (id: string, val: boolean) => void;
   onDeleteRequest: (id: string) => void;
-  deleteConfirmId: string | null;
-  onDeleteConfirm: (id: string) => void;
-  onDeleteCancel: () => void;
   updatingId: string | null;
 }) {
   return (
@@ -81,13 +80,8 @@ function AuthorRow({ author, onFeaturedToggle, onDeleteRequest, deleteConfirmId,
           style={{ color: author.featured ? '#9A7840' : '#9AA6A4' }}>
           {author.featured ? '★ Quitar dest.' : '☆ Destacar'}
         </button>
-        <div className="relative">
-          <button onClick={() => onDeleteRequest(author.id)}
-            className="text-[11px] font-semibold px-2.5 py-1 rounded-lg hover:bg-white transition-colors" style={{ color: '#B85C5C' }}>🗑</button>
-          {deleteConfirmId === author.id && (
-            <DeletePopover name={author.name} onConfirm={() => onDeleteConfirm(author.id)} onCancel={onDeleteCancel} />
-          )}
-        </div>
+        <button onClick={() => onDeleteRequest(author.id)}
+          className="text-[11px] font-semibold px-2.5 py-1 rounded-lg hover:bg-white transition-colors" style={{ color: '#B85C5C' }}>🗑</button>
       </div>
     </div>
   );
@@ -134,6 +128,12 @@ export default function AdminAutoresPage() {
   }, [getAuthors, debouncedSearch]);
 
   useEffect(() => { fetchAuthors(); }, [fetchAuthors]);
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') setDeleteConfirmId(null); };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, []);
 
   const handleFeaturedToggle = async (id: string, val: boolean) => {
     setUpdatingId(id);
@@ -186,14 +186,23 @@ export default function AdminAutoresPage() {
                   author={author}
                   onFeaturedToggle={handleFeaturedToggle}
                   onDeleteRequest={id => setDeleteConfirmId(id)}
-                  deleteConfirmId={deleteConfirmId}
-                  onDeleteConfirm={handleDeleteConfirm}
-                  onDeleteCancel={() => setDeleteConfirmId(null)}
                   updatingId={updatingId}
                 />
               ))
         }
       </div>
+
+      {deleteConfirmId && (() => {
+        const target = authors.find(a => a.id === deleteConfirmId);
+        if (!target) return null;
+        return (
+          <DeleteConfirmModal
+            name={target.name}
+            onConfirm={() => handleDeleteConfirm(target.id)}
+            onCancel={() => setDeleteConfirmId(null)}
+          />
+        );
+      })()}
     </div>
   );
 }

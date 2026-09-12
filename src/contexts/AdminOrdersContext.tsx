@@ -9,7 +9,7 @@ export type AdminOrder = {
   id: string;
   status: string;
   customer_name: string;
-  customer_email: string;
+  customer_email: string | null;
   customer_phone?: string;
   shipping_address: string;
   city?: string | null;
@@ -17,6 +17,7 @@ export type AdminOrder = {
   postal_code?: string | null;
   address_reference?: string | null;
   delivery_method?: string | null;
+  payment_method?: string | null;
   total_amount: number;
   shipped: boolean;
   created_at: string;

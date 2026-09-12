@@ -46,20 +46,24 @@ function SkeletonRow() {
   );
 }
 
-// ─── Delete popover ───────────────────────────────────────────────────────────
-function DeletePopover({ title, onConfirm, onCancel }: { title: string; onConfirm: () => void; onCancel: () => void }) {
-  const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const handler = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) onCancel(); };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [onCancel]);
+// ─── Delete confirm modal ───────────────────────────────────────────────────────
+// Es un modal centrado (fixed, fuera del contenedor con overflow-hidden de la lista)
+// en vez de un popover anclado al botón: anclado, el overflow-hidden de la card que
+// redondea la lista lo recortaba y quedaba invisible.
+function DeleteConfirmModal({ title, onConfirm, onCancel }: { title: string; onConfirm: () => void; onCancel: () => void }) {
+  // El Escape ya lo maneja el atajo de teclado global de la página (setDeleteConfirmId(null)).
   return (
-    <div ref={ref} className="absolute right-0 top-full mt-1 z-50 w-72 rounded-xl bg-white border border-gray-200 shadow-xl p-4" style={{ boxShadow: '0 8px 32px rgba(52,84,87,0.15)' }}>
-      <p className="text-sm text-gray-700 mb-3">¿Eliminar <span className="font-semibold">"{title}"</span>? Esta acción no se puede deshacer.</p>
-      <div className="flex gap-2">
-        <button onClick={onCancel} className="flex-1 py-1.5 rounded-lg text-sm text-gray-500 border border-gray-200 hover:border-gray-300 transition-colors">Cancelar</button>
-        <button onClick={onConfirm} className="flex-1 py-1.5 rounded-lg text-sm font-semibold text-white transition-opacity hover:opacity-90" style={{ background: '#B85C5C' }}>Eliminar</button>
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4" style={{ background: 'rgba(28,43,44,0.35)' }} onMouseDown={onCancel}>
+      <div
+        onMouseDown={e => e.stopPropagation()}
+        className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-xl"
+        style={{ boxShadow: '0 20px 48px rgba(0,0,0,0.25)' }}
+      >
+        <p className="text-sm text-gray-700 mb-4">¿Eliminar <span className="font-semibold">"{title}"</span>? Esta acción no se puede deshacer.</p>
+        <div className="flex gap-2">
+          <button onClick={onCancel} className="flex-1 py-1.5 rounded-lg text-sm text-gray-500 border border-gray-200 hover:border-gray-300 transition-colors">Cancelar</button>
+          <button onClick={onConfirm} className="flex-1 py-1.5 rounded-lg text-sm font-semibold text-white transition-opacity hover:opacity-90" style={{ background: '#B85C5C' }}>Eliminar</button>
+        </div>
       </div>
     </div>
   );
@@ -93,13 +97,10 @@ type RowProps = {
   onFeaturedToggle: (id: string, val: boolean) => void;
   onDuplicate: (id: string) => void;
   onDeleteRequest: (id: string) => void;
-  deleteConfirmId: string | null;
-  onDeleteConfirm: (id: string) => void;
-  onDeleteCancel: () => void;
   updatingId: string | null;
 };
 
-function ProductRow({ book, now, selected, onSelect, editingStockId, onStockClick, onStockSave, onStockCancel, onFeaturedToggle, onDuplicate, onDeleteRequest, deleteConfirmId, onDeleteConfirm, onDeleteCancel, updatingId }: RowProps) {
+function ProductRow({ book, now, selected, onSelect, editingStockId, onStockClick, onStockSave, onStockCancel, onFeaturedToggle, onDuplicate, onDeleteRequest, updatingId }: RowProps) {
   const isNew      = Boolean(book.new_until && book.new_until > now);
   const isLowStock = typeof book.stock === 'number' && book.stock > 0 && book.stock <= 5;
   const isNoStock  = book.stock === 0;
@@ -187,15 +188,10 @@ function ProductRow({ book, now, selected, onSelect, editingStockId, onStockClic
           className="text-[11px] font-semibold px-2.5 py-1 rounded-lg hover:bg-white transition-colors text-gray-400">
           📋 Dupl.
         </button>
-        <div className="relative">
-          <button onClick={() => onDeleteRequest(book.id)}
-            className="text-[11px] font-semibold px-2.5 py-1 rounded-lg hover:bg-white transition-colors" style={{ color: '#B85C5C' }}>
-            🗑
-          </button>
-          {deleteConfirmId === book.id && (
-            <DeletePopover title={book.title} onConfirm={() => onDeleteConfirm(book.id)} onCancel={onDeleteCancel} />
-          )}
-        </div>
+        <button onClick={() => onDeleteRequest(book.id)}
+          className="text-[11px] font-semibold px-2.5 py-1 rounded-lg hover:bg-white transition-colors" style={{ color: '#B85C5C' }}>
+          🗑
+        </button>
       </div>
     </div>
   );
@@ -522,9 +518,6 @@ export default function AdminProductosPage() {
                   onFeaturedToggle={handleFeaturedToggle}
                   onDuplicate={handleDuplicate}
                   onDeleteRequest={id => setDeleteConfirmId(id)}
-                  deleteConfirmId={deleteConfirmId}
-                  onDeleteConfirm={handleDeleteConfirm}
-                  onDeleteCancel={() => setDeleteConfirmId(null)}
                   updatingId={updatingId}
                 />
               ))
@@ -554,6 +547,19 @@ export default function AdminProductosPage() {
           onClear={() => setSelectedIds(new Set())}
         />
       )}
+
+      {/* ── Delete confirm modal ──────────────────────────────────────────── */}
+      {deleteConfirmId && (() => {
+        const target = products.find(p => p.id === deleteConfirmId);
+        if (!target) return null;
+        return (
+          <DeleteConfirmModal
+            title={target.title}
+            onConfirm={() => handleDeleteConfirm(target.id)}
+            onCancel={() => setDeleteConfirmId(null)}
+          />
+        );
+      })()}
     </div>
   );
 }

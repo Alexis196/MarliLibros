@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { initMercadoPago, CardPayment } from '@mercadopago/sdk-react';
@@ -61,8 +61,10 @@ export default function CheckoutPage() {
     postalCode: '',
     reference: '',
   });
-  const [activeTab, setActiveTab] = useState<'card' | 'mercadopago'>('card');
+  const [activeTab, setActiveTab] = useState<'card' | 'mercadopago' | 'cash'>('card');
   const [deliveryMethod, setDeliveryMethod] = useState<'shipping' | 'pickup'>('shipping');
+
+  const [cashForm, setCashForm] = useState({ firstName: '', lastName: '', address: '', phone: '' });
 
   const [couponInput, setCouponInput] = useState('');
   const [appliedCoupon, setAppliedCoupon] = useState<AppliedCoupon | null>(null);
@@ -72,10 +74,21 @@ export default function CheckoutPage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [mpReady, setMpReady] = useState(false);
+  // Mercado Pago limita a 3 los intentos de "Secure Fields" por instancia del brick de
+  // tarjeta: al cuarto intento sobre el mismo brick tira "fields_setup_failed_after_3_tries".
+  // Forzamos un remount completo (brick nuevo) después de cada intento fallido para que
+  // el próximo intento arranque con una sesión de Secure Fields fresca.
+  const [cardAttempt, setCardAttempt] = useState(0);
 
   const discountAmount = appliedCoupon?.discountAmount ?? 0;
-  const shippingCost = shippingCostFor(deliveryMethod);
+  const shippingCost = activeTab === 'cash' ? 0 : shippingCostFor(deliveryMethod);
   const finalTotal = Math.round((totalPrice - discountAmount + shippingCost) * 100) / 100;
+
+  // El brick de tarjeta de Mercado Pago se reinicializa (recarga) cada vez que cambia
+  // la referencia de `initialization`. No le pasamos el email en vivo (aunque sea con
+  // debounce, una pausa al tipear ya alcanza para disparar una recarga): el email real
+  // siempre se manda aparte, tomado de `form.email`, al confirmar el pago.
+  const cardInitialization = useMemo(() => ({ amount: finalTotal }), [finalTotal]);
 
   useEffect(() => { refreshStock(); }, [refreshStock]);
 
@@ -89,6 +102,13 @@ export default function CheckoutPage() {
   const update =
     (field: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
       setForm(prev => ({ ...prev, [field]: e.target.value }));
+
+  const updateCash =
+    (field: keyof typeof cashForm) => (e: React.ChangeEvent<HTMLInputElement>) =>
+      setCashForm(prev => ({ ...prev, [field]: e.target.value }));
+
+  const missingCashData = () =>
+    !cashForm.firstName || !cashForm.lastName || !cashForm.address || !cashForm.phone;
 
   const missingShippingData = () =>
     deliveryMethod === 'pickup'
@@ -165,6 +185,38 @@ export default function CheckoutPage() {
     }
   };
 
+  const handleCashSubmit = async () => {
+    if (missingCashData()) {
+      setError('Completá tus datos antes de confirmar el pedido.');
+      return;
+    }
+    if (hasStockIssue) {
+      setError('Ajustá las cantidades del carrito antes de confirmar: algún libro ya no tiene stock suficiente.');
+      return;
+    }
+    setError(null);
+    setSubmitting(true);
+    try {
+      const res = await fetch('/api/checkout/cash', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          customer: cashForm,
+          items: items.map(i => ({ bookId: i.bookId, quantity: i.quantity })),
+          couponCode: appliedCoupon?.code,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.order_id) {
+        throw new Error(data.error || 'No pudimos registrar el pedido. Intentá de nuevo.');
+      }
+      router.push(`/checkout/pending?order_id=${data.order_id}&method=cash`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Ocurrió un error inesperado.');
+      setSubmitting(false);
+    }
+  };
+
   const handleCardSubmit = async (cardFormData: {
     token: string;
     issuer_id: string;
@@ -205,12 +257,37 @@ export default function CheckoutPage() {
       }
       redirectForStatus(data.status, data.order_id);
     } catch (err) {
-      if (!(err instanceof Error && (err.message === 'missing-shipping-data' || err.message === 'payment-rejected'))) {
+      const isValidationError = err instanceof Error && err.message === 'missing-shipping-data';
+      if (!isValidationError) {
         setError(prev => prev ?? 'No pudimos procesar el pago. Intentá de nuevo.');
+        // El intento de pago llegó a tocar el brick (aprobó/rechazó/falló): el brick se
+        // remonta (nuevo cardAttempt) para que el próximo intento tenga una sesión de
+        // Secure Fields fresca en vez de reusar la que ya se usó.
+        setCardAttempt(n => n + 1);
       }
       throw err;
     }
   };
+
+  // El brick de tarjeta reinicializa (recarga) cada vez que `onSubmit`/`onError` cambian
+  // de referencia, y handleCardSubmit se recrea en cada render porque lee form/carrito
+  // actuales. Lo forwardeamos por ref para exponer una función estable sin perder los
+  // datos frescos al momento del submit real.
+  const handleCardSubmitRef = useRef(handleCardSubmit);
+  handleCardSubmitRef.current = handleCardSubmit;
+  const stableHandleCardSubmit = useCallback(
+    (cardFormData: Parameters<typeof handleCardSubmit>[0]) => handleCardSubmitRef.current(cardFormData),
+    []
+  );
+
+  const handleCardError = useCallback((err: unknown) => {
+    console.error('CardPayment brick error', err);
+    setError('Hubo un problema con los datos de la tarjeta. Revisalos e intentá de nuevo.');
+    // Un error "critical" (p. ej. fields_setup_failed_after_3_tries) deja el brick
+    // roto: lo remontamos ya mismo para que el usuario pueda seguir intentando.
+    const isCritical = typeof err === 'object' && err !== null && 'type' in err && (err as { type?: string }).type === 'critical';
+    if (isCritical) setCardAttempt(n => n + 1);
+  }, []);
 
   if (items.length === 0) {
     return (
@@ -239,11 +316,170 @@ export default function CheckoutPage() {
           </h1>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 sm:gap-8 items-start">
-            {/* Datos de envío + pago */}
+            {/* Medio de pago + datos de envío */}
             <div className="lg:col-span-2 space-y-6">
               <div className="rounded-2xl bg-white p-5 sm:p-7" style={{ boxShadow: '0 4px 20px rgba(52,84,87,0.06)' }}>
-                <h2 className="text-base font-bold mb-5" style={{ color: '#345457' }}>Entrega</h2>
+                <h2 className="text-base font-bold mb-5" style={{ color: '#345457' }}>Medio de pago</h2>
 
+                <div className="flex gap-2 mb-6">
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('card')}
+                    className={`flex-1 px-4 py-2.5 rounded-xl text-sm font-semibold border transition-colors duration-300 ${
+                      activeTab === 'card'
+                        ? 'bg-[#345457] text-white border-[#345457]'
+                        : 'bg-white text-gray-500 border-gray-200 hover:border-[#345457]/30 hover:text-[#345457]'
+                    }`}
+                  >
+                    <span className="sm:hidden">💳 Tarjeta</span>
+                    <span className="hidden sm:inline">💳 Tarjeta de crédito/débito</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('mercadopago')}
+                    className={`flex-1 px-4 py-2.5 rounded-xl text-sm font-semibold border transition-colors duration-300 ${
+                      activeTab === 'mercadopago'
+                        ? 'bg-[#345457] text-white border-[#345457]'
+                        : 'bg-white text-gray-500 border-gray-200 hover:border-[#345457]/30 hover:text-[#345457]'
+                    }`}
+                  >
+                    Mercado Pago
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('cash')}
+                    className={`flex-1 px-4 py-2.5 rounded-xl text-sm font-semibold border transition-colors duration-300 ${
+                      activeTab === 'cash'
+                        ? 'bg-[#345457] text-white border-[#345457]'
+                        : 'bg-white text-gray-500 border-gray-200 hover:border-[#345457]/30 hover:text-[#345457]'
+                    }`}
+                  >
+                    💵 Efectivo o transferencia
+                  </button>
+                </div>
+
+                {error && <p className="text-sm text-red-500 mb-4">{error}</p>}
+
+                {hasStockIssue ? (
+                  <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3">
+                    <p className="text-sm font-medium" style={{ color: '#B85C5C' }}>
+                      Algún libro de tu carrito ya no tiene stock suficiente.
+                    </p>
+                    <Link href="/carrito" className="text-sm font-semibold underline" style={{ color: '#B85C5C' }}>
+                      Volver al carrito para ajustarlo →
+                    </Link>
+                  </div>
+                ) : activeTab === 'card' ? (
+                  !MP_PUBLIC_KEY ? (
+                    <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+                      <p className="text-sm text-amber-700">
+                        El pago con tarjeta no está disponible en este momento. Podés pagar con Mercado Pago desde la otra pestaña.
+                      </p>
+                    </div>
+                  ) : mpReady ? (
+                    <CardPayment
+                      key={`${finalTotal}:${cardAttempt}`}
+                      initialization={cardInitialization}
+                      onSubmit={stableHandleCardSubmit}
+                      onError={handleCardError}
+                    />
+                  ) : (
+                    <div className="flex items-center justify-center py-10">
+                      <MarliLoader size={64} label="Cargando formulario de pago" />
+                    </div>
+                  )
+                ) : activeTab === 'mercadopago' ? (
+                  <div>
+                    <button
+                      type="button"
+                      onClick={handleMercadoPagoSubmit}
+                      disabled={submitting}
+                      className="w-full px-5 py-3 rounded-xl text-sm font-semibold text-white hover:opacity-90 transition-opacity disabled:opacity-60"
+                      style={{ backgroundColor: '#345457' }}
+                    >
+                      {submitting ? 'Redirigiendo a Mercado Pago…' : 'Pagar con Mercado Pago'}
+                    </button>
+                    <p className="text-[11px] text-gray-400 mt-3 text-center">
+                      Vas a completar el pago de forma segura en Mercado Pago. Aceptamos tarjetas de crédito, débito y saldo en cuenta.
+                    </p>
+                  </div>
+                ) : (
+                  <div>
+                    <button
+                      type="button"
+                      onClick={handleCashSubmit}
+                      disabled={submitting}
+                      className="w-full px-5 py-3 rounded-xl text-sm font-semibold text-white hover:opacity-90 transition-opacity disabled:opacity-60"
+                      style={{ backgroundColor: '#345457' }}
+                    >
+                      {submitting ? 'Registrando pedido…' : 'Confirmar pedido'}
+                    </button>
+                    <p className="text-[11px] text-gray-400 mt-3 text-center">
+                      Te contactamos por WhatsApp para coordinar la entrega. Si te queda más cómodo, te pasamos el alias para pagar por transferencia.
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              <div className="rounded-2xl bg-white p-5 sm:p-7" style={{ boxShadow: '0 4px 20px rgba(52,84,87,0.06)' }}>
+                <h2 className="text-base font-bold mb-5" style={{ color: '#345457' }}>
+                  {activeTab === 'cash' ? 'Tus datos' : 'Entrega'}
+                </h2>
+
+                {activeTab === 'cash' ? (
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-[12px] font-medium text-gray-500 mb-1.5">Nombre</label>
+                        <input
+                          required
+                          type="text"
+                          value={cashForm.firstName}
+                          onChange={updateCash('firstName')}
+                          className="w-full rounded-xl border border-gray-200 px-3.5 py-2.5 text-sm outline-none transition-all duration-300 focus:border-[#345457] focus:shadow-[0_0_0_3px_rgba(52,84,87,0.08)]"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[12px] font-medium text-gray-500 mb-1.5">Apellido</label>
+                        <input
+                          required
+                          type="text"
+                          value={cashForm.lastName}
+                          onChange={updateCash('lastName')}
+                          className="w-full rounded-xl border border-gray-200 px-3.5 py-2.5 text-sm outline-none transition-all duration-300 focus:border-[#345457] focus:shadow-[0_0_0_3px_rgba(52,84,87,0.08)]"
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-[12px] font-medium text-gray-500 mb-1.5">Dirección</label>
+                      <input
+                        required
+                        type="text"
+                        placeholder="Calle y número"
+                        value={cashForm.address}
+                        onChange={updateCash('address')}
+                        className="w-full rounded-xl border border-gray-200 px-3.5 py-2.5 text-sm outline-none transition-all duration-300 focus:border-[#345457] focus:shadow-[0_0_0_3px_rgba(52,84,87,0.08)]"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[12px] font-medium text-gray-500 mb-1.5">Teléfono</label>
+                      <input
+                        required
+                        type="tel"
+                        value={cashForm.phone}
+                        onChange={updateCash('phone')}
+                        className="w-full rounded-xl border border-gray-200 px-3.5 py-2.5 text-sm outline-none transition-all duration-300 focus:border-[#345457] focus:shadow-[0_0_0_3px_rgba(52,84,87,0.08)]"
+                      />
+                    </div>
+                    <div className="rounded-xl px-4 py-3" style={{ backgroundColor: 'rgba(52,84,87,0.06)' }}>
+                      <p className="text-[13px] font-semibold" style={{ color: '#345457' }}>Pagás en efectivo o por transferencia.</p>
+                      <p className="text-[12px] text-gray-500 mt-1">
+                        Te vamos a contactar por WhatsApp para coordinar la entrega. Si te queda más cómodo, te pasamos el alias del negocio para que hagas una transferencia.
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                <>
                 <div className="flex gap-2 mb-6">
                   <button
                     type="button"
@@ -375,85 +611,7 @@ export default function CheckoutPage() {
                     </>
                   )}
                 </div>
-              </div>
-
-              <div className="rounded-2xl bg-white p-5 sm:p-7" style={{ boxShadow: '0 4px 20px rgba(52,84,87,0.06)' }}>
-                <h2 className="text-base font-bold mb-5" style={{ color: '#345457' }}>Medio de pago</h2>
-
-                <div className="flex gap-2 mb-6">
-                  <button
-                    type="button"
-                    onClick={() => setActiveTab('card')}
-                    className={`flex-1 px-4 py-2.5 rounded-xl text-sm font-semibold border transition-colors duration-300 ${
-                      activeTab === 'card'
-                        ? 'bg-[#345457] text-white border-[#345457]'
-                        : 'bg-white text-gray-500 border-gray-200 hover:border-[#345457]/30 hover:text-[#345457]'
-                    }`}
-                  >
-                    <span className="sm:hidden">💳 Tarjeta</span>
-                    <span className="hidden sm:inline">💳 Tarjeta de crédito/débito</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setActiveTab('mercadopago')}
-                    className={`flex-1 px-4 py-2.5 rounded-xl text-sm font-semibold border transition-colors duration-300 ${
-                      activeTab === 'mercadopago'
-                        ? 'bg-[#345457] text-white border-[#345457]'
-                        : 'bg-white text-gray-500 border-gray-200 hover:border-[#345457]/30 hover:text-[#345457]'
-                    }`}
-                  >
-                    Mercado Pago
-                  </button>
-                </div>
-
-                {error && <p className="text-sm text-red-500 mb-4">{error}</p>}
-
-                {hasStockIssue ? (
-                  <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3">
-                    <p className="text-sm font-medium" style={{ color: '#B85C5C' }}>
-                      Algún libro de tu carrito ya no tiene stock suficiente.
-                    </p>
-                    <Link href="/carrito" className="text-sm font-semibold underline" style={{ color: '#B85C5C' }}>
-                      Volver al carrito para ajustarlo →
-                    </Link>
-                  </div>
-                ) : activeTab === 'card' ? (
-                  !MP_PUBLIC_KEY ? (
-                    <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
-                      <p className="text-sm text-amber-700">
-                        El pago con tarjeta no está disponible en este momento. Podés pagar con Mercado Pago desde la otra pestaña.
-                      </p>
-                    </div>
-                  ) : mpReady ? (
-                    <CardPayment
-                      key={finalTotal}
-                      initialization={{ amount: finalTotal, payer: { email: form.email || undefined } }}
-                      onSubmit={handleCardSubmit}
-                      onError={(err) => {
-                        console.error('CardPayment brick error', err);
-                        setError('Hubo un problema con los datos de la tarjeta. Revisalos e intentá de nuevo.');
-                      }}
-                    />
-                  ) : (
-                    <div className="flex items-center justify-center py-10">
-                      <MarliLoader size={64} label="Cargando formulario de pago" />
-                    </div>
-                  )
-                ) : (
-                  <div>
-                    <button
-                      type="button"
-                      onClick={handleMercadoPagoSubmit}
-                      disabled={submitting}
-                      className="w-full px-5 py-3 rounded-xl text-sm font-semibold text-white hover:opacity-90 transition-opacity disabled:opacity-60"
-                      style={{ backgroundColor: '#345457' }}
-                    >
-                      {submitting ? 'Redirigiendo a Mercado Pago…' : 'Pagar con Mercado Pago'}
-                    </button>
-                    <p className="text-[11px] text-gray-400 mt-3 text-center">
-                      Vas a completar el pago de forma segura en Mercado Pago. Aceptamos tarjetas de crédito, débito y saldo en cuenta.
-                    </p>
-                  </div>
+                </>
                 )}
               </div>
             </div>

@@ -2,8 +2,8 @@
 // que requiere cuenta comercial (CUIT + contrato) todavía no dada de alta.
 export const FLAT_SHIPPING_RATE = 5000;
 
-export type DeliveryMethod = 'shipping' | 'pickup';
+export type DeliveryMethod = 'shipping' | 'pickup' | 'cash';
 
 export function shippingCostFor(deliveryMethod: DeliveryMethod): number {
-  return deliveryMethod === 'pickup' ? 0 : FLAT_SHIPPING_RATE;
+  return deliveryMethod === 'shipping' ? FLAT_SHIPPING_RATE : 0;
 }
