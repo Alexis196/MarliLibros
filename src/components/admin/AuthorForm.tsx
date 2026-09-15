@@ -3,7 +3,6 @@
 import { useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { convertImageToWebp } from '@/lib/image-conversion';
 import { useAdminAuthors, type AdminAuthor } from '@/contexts/AdminAuthorsContext';
 import { COUNTRIES } from '@/lib/countries';
 
@@ -52,7 +51,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 }
 
 // ─── Photo drop zone (circular) ────────────────────────────────────────────────
-function PhotoZone({ preview, name, converting, onFile, onClear }: { preview: string; name: string; converting: boolean; onFile: (f: File) => void; onClear: () => void }) {
+function PhotoZone({ preview, name, onFile, onClear }: { preview: string; name: string; onFile: (f: File) => void; onClear: () => void }) {
   const [dragging, setDragging] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -74,11 +73,6 @@ function PhotoZone({ preview, name, converting, onFile, onClear }: { preview: st
           className="px-3 py-1.5 rounded-xl bg-white/20 text-white text-[12px] font-medium">Eliminar</button>
       </div>
       <input ref={inputRef} type="file" accept="image/*" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) onFile(f); }} />
-      {converting && (
-        <div className="absolute inset-0 rounded-full bg-white/80 flex items-center justify-center">
-          <p className="text-[11px] font-medium" style={{ color: BRAND }}>…</p>
-        </div>
-      )}
     </div>
   );
 
@@ -89,9 +83,7 @@ function PhotoZone({ preview, name, converting, onFile, onClear }: { preview: st
       onClick={() => inputRef.current?.click()}
       className="w-40 h-40 mx-auto rounded-full border-2 border-dashed flex flex-col items-center justify-center gap-2 cursor-pointer transition-all duration-200"
       style={{ borderColor: dragging ? BRAND : '#D1D5DB', background: dragging ? 'rgba(52,84,87,0.04)' : name ? BRAND : 'transparent' }}>
-      {converting ? (
-        <span className="text-3xl">⏳</span>
-      ) : name ? (
+      {name ? (
         <span className="text-3xl font-bold text-white">{name[0].toUpperCase()}</span>
       ) : (
         <>
@@ -116,24 +108,19 @@ export function AuthorForm({ initialAuthor }: { initialAuthor?: AdminAuthor }) {
 
   const [photoUrl, setPhotoUrl] = useState(initialAuthor?.photo_url ?? '');
   const [preview, setPreview] = useState(initialAuthor?.photo_url ?? '');
-  const [pendingImage, setPendingImage] = useState<Blob | null>(null);
-  const [converting, setConverting] = useState(false);
+  const [pendingImage, setPendingImage] = useState<File | null>(null);
 
   const [submitting, setSubmitting] = useState(false);
   const [errors, setErrors] = useState<{ name?: string; global?: string; photo?: string }>({});
 
-  const handleImageFile = async (file: File) => {
-    setConverting(true);
+  const handleImageFile = (file: File) => {
     setErrors(prev => ({ ...prev, photo: undefined }));
-    try {
-      const webp = await convertImageToWebp(file, { maxWidth: 500 });
-      setPendingImage(webp);
-      setPreview(URL.createObjectURL(webp));
-    } catch {
-      setErrors(prev => ({ ...prev, photo: 'No pudimos procesar esa imagen. Probá con otra.' }));
-    } finally {
-      setConverting(false);
+    if (!file.type.startsWith('image/')) {
+      setErrors(prev => ({ ...prev, photo: 'El archivo debe ser una imagen.' }));
+      return;
     }
+    setPendingImage(file);
+    setPreview(URL.createObjectURL(file));
   };
 
   const handleClearPhoto = () => { setPreview(''); setPhotoUrl(''); setPendingImage(null); };
@@ -146,7 +133,7 @@ export function AuthorForm({ initialAuthor }: { initialAuthor?: AdminAuthor }) {
       let finalPhotoUrl = photoUrl;
       if (pendingImage) {
         const fd = new FormData();
-        fd.append('file', pendingImage, 'photo.webp');
+        fd.append('file', pendingImage, pendingImage.name || 'photo');
         const up = await fetch('/api/admin/upload-author-photo', { method: 'POST', body: fd });
         const upd = await up.json() as { url?: string; error?: string };
         if (!up.ok) throw new Error(upd.error ?? 'No pudimos subir la imagen.');
@@ -190,7 +177,7 @@ export function AuthorForm({ initialAuthor }: { initialAuthor?: AdminAuthor }) {
             className="px-4 py-2 rounded-xl text-sm font-medium text-gray-500 border border-gray-200 hover:border-gray-300 hover:text-gray-700 transition-colors">
             Cancelar
           </button>
-          <button type="button" onClick={submit} disabled={submitting || converting}
+          <button type="button" onClick={submit} disabled={submitting}
             className="px-5 py-2 rounded-xl text-sm font-semibold text-white hover:opacity-90 transition-opacity disabled:opacity-60"
             style={{ background: BRAND }}>
             {submitting ? 'Guardando…' : isEditing ? 'Guardar cambios' : '● Publicar'}
@@ -228,7 +215,7 @@ export function AuthorForm({ initialAuthor }: { initialAuthor?: AdminAuthor }) {
 
         <div className="w-64 shrink-0 hidden sm:block">
           <Section title="Foto">
-            <PhotoZone preview={preview} name={name} converting={converting} onFile={handleImageFile} onClear={handleClearPhoto} />
+            <PhotoZone preview={preview} name={name} onFile={handleImageFile} onClear={handleClearPhoto} />
             {errors.photo && <p className="text-[11px] text-red-500 mt-2 text-center">⚠ {errors.photo}</p>}
           </Section>
         </div>
@@ -236,7 +223,7 @@ export function AuthorForm({ initialAuthor }: { initialAuthor?: AdminAuthor }) {
 
       <div className="sm:hidden mt-5 max-w-3xl">
         <Section title="Foto">
-          <PhotoZone preview={preview} name={name} converting={converting} onFile={handleImageFile} onClear={handleClearPhoto} />
+          <PhotoZone preview={preview} name={name} onFile={handleImageFile} onClear={handleClearPhoto} />
           {errors.photo && <p className="text-[11px] text-red-500 mt-2 text-center">⚠ {errors.photo}</p>}
         </Section>
       </div>

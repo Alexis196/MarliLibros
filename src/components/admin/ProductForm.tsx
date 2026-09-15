@@ -3,7 +3,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { convertImageToWebp } from '@/lib/image-conversion';
 import { useAdminProducts } from '@/contexts/AdminProductsContext';
 import { CATEGORY_NAMES as CATEGORIES } from '@/lib/categories';
 
@@ -134,7 +133,7 @@ function TagsInput({ tags, onChange }: { tags: string[]; onChange: (t: string[])
 }
 
 // ─── Cover drop zone ──────────────────────────────────────────────────────────
-function CoverZone({ preview, converting, onFile, onClear }: { preview: string; converting: boolean; onFile: (f: File) => void; onClear: () => void }) {
+function CoverZone({ preview, onFile, onClear }: { preview: string; onFile: (f: File) => void; onClear: () => void }) {
   const [dragging, setDragging] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -156,11 +155,6 @@ function CoverZone({ preview, converting, onFile, onClear }: { preview: string; 
           className="px-4 py-2 rounded-xl bg-white/20 text-white text-sm font-medium">Eliminar</button>
       </div>
       <input ref={inputRef} type="file" accept="image/*" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) onFile(f); }} />
-      {converting && (
-        <div className="absolute inset-0 rounded-2xl bg-white/80 flex items-center justify-center">
-          <p className="text-sm font-medium" style={{ color: BRAND }}>Procesando…</p>
-        </div>
-      )}
     </div>
   );
 
@@ -171,12 +165,12 @@ function CoverZone({ preview, converting, onFile, onClear }: { preview: string; 
       onClick={() => inputRef.current?.click()}
       className="w-full aspect-[3/4] rounded-2xl border-2 border-dashed flex flex-col items-center justify-center gap-3 cursor-pointer transition-all duration-200"
       style={{ borderColor: dragging ? BRAND : '#D1D5DB', background: dragging ? 'rgba(52,84,87,0.04)' : 'transparent' }}>
-      <span className="text-5xl">{converting ? '⏳' : '📷'}</span>
+      <span className="text-5xl">📷</span>
       <div className="text-center">
-        <p className="text-sm font-medium text-gray-600">{converting ? 'Procesando imagen…' : 'Arrastrá una imagen aquí'}</p>
-        {!converting && <p className="text-[11px] text-gray-400 mt-0.5">o hacé clic para seleccionar</p>}
+        <p className="text-sm font-medium text-gray-600">Arrastrá una imagen aquí</p>
+        <p className="text-[11px] text-gray-400 mt-0.5">o hacé clic para seleccionar</p>
       </div>
-      {!converting && <p className="text-[10px] text-gray-300">Se convierte a WebP automáticamente</p>}
+      <p className="text-[10px] text-gray-300">Se optimiza automáticamente al guardar</p>
       <input ref={inputRef} type="file" accept="image/*" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) onFile(f); }} />
     </div>
   );
@@ -269,8 +263,7 @@ export function ProductForm({ initialBook }: { initialBook?: Book }) {
   const [form, setForm]         = useState(defaultForm);
   const [coverUrl, setCoverUrl] = useState(initialBook?.cover_url ?? '');
   const [preview, setPreview]   = useState(initialBook?.cover_url ?? '');
-  const [pendingImage, setPendingImage] = useState<Blob | null>(null);
-  const [converting, setConverting]     = useState(false);
+  const [pendingImage, setPendingImage] = useState<File | null>(null);
   const [submitting, setSubmitting]     = useState(false);
   const [savingDraft, setSavingDraft]   = useState(false);
   const [importingISBN, setImportingISBN] = useState(false);
@@ -323,18 +316,14 @@ export function ProductForm({ initialBook }: { initialBook?: Book }) {
 
   const clearDraft = () => { try { localStorage.removeItem(draftKey); } catch {} };
 
-  const handleImageFile = async (file: File) => {
-    setConverting(true);
+  const handleImageFile = (file: File) => {
     setErrors(prev => ({ ...prev, cover: undefined }));
-    try {
-      const webp = await convertImageToWebp(file);
-      setPendingImage(webp);
-      setPreview(URL.createObjectURL(webp));
-    } catch {
-      setErrors(prev => ({ ...prev, cover: 'No pudimos procesar esa imagen. Probá con otra.' }));
-    } finally {
-      setConverting(false);
+    if (!file.type.startsWith('image/')) {
+      setErrors(prev => ({ ...prev, cover: 'El archivo debe ser una imagen.' }));
+      return;
     }
+    setPendingImage(file);
+    setPreview(URL.createObjectURL(file));
   };
 
   const handleClearCover = () => { setPreview(''); setCoverUrl(''); setPendingImage(null); };
@@ -359,11 +348,11 @@ export function ProductForm({ initialBook }: { initialBook?: Book }) {
       const coverLg = (book.cover as Record<string, string>)?.large;
       if (coverLg) {
         try {
-          const imgRes  = await fetch(coverLg);
-          const blob    = await imgRes.blob();
-          const webp    = await convertImageToWebp(new File([blob], 'cover.jpg', { type: blob.type }));
-          setPendingImage(webp);
-          setPreview(URL.createObjectURL(webp));
+          const imgRes = await fetch(coverLg);
+          const blob   = await imgRes.blob();
+          const file   = new File([blob], 'cover', { type: blob.type || 'image/jpeg' });
+          setPendingImage(file);
+          setPreview(URL.createObjectURL(file));
         } catch {}
       }
     } catch {
@@ -419,7 +408,7 @@ export function ProductForm({ initialBook }: { initialBook?: Book }) {
       let finalCoverUrl = coverUrl;
       if (pendingImage) {
         const fd  = new FormData();
-        fd.append('file', pendingImage, 'cover.webp');
+        fd.append('file', pendingImage, pendingImage.name || 'cover');
         const up  = await fetch('/api/admin/upload', { method: 'POST', body: fd });
         const upd = await up.json() as { url?: string; error?: string };
         if (!up.ok) throw new Error(upd.error ?? 'No pudimos subir la imagen.');
@@ -487,7 +476,7 @@ export function ProductForm({ initialBook }: { initialBook?: Book }) {
               {savingDraft ? 'Guardando…' : '○ Borrador'}
             </button>
           )}
-          <button type="button" onClick={() => submit()} disabled={submitting || converting}
+          <button type="button" onClick={() => submit()} disabled={submitting}
             className="px-5 py-2 rounded-xl text-sm font-semibold text-white hover:opacity-90 transition-opacity disabled:opacity-60"
             style={{ background: BRAND }}>
             {submitting ? 'Guardando…' : isEditing ? 'Guardar cambios' : '● Publicar'}
@@ -648,7 +637,7 @@ export function ProductForm({ initialBook }: { initialBook?: Book }) {
         {/* Right column — sticky */}
         <div className="w-64 xl:w-72 shrink-0 hidden lg:flex flex-col gap-5 sticky top-24">
           <Section title="Portada">
-            <CoverZone preview={preview} converting={converting} onFile={handleImageFile} onClear={handleClearCover} />
+            <CoverZone preview={preview} onFile={handleImageFile} onClear={handleClearCover} />
             {errors.cover && <p className="text-[11px] text-red-500 mt-2">⚠ {errors.cover}</p>}
           </Section>
           <Section title="Vista previa">
@@ -675,7 +664,7 @@ export function ProductForm({ initialBook }: { initialBook?: Book }) {
       {/* Cover section for mobile (below form) */}
       <div className="lg:hidden mt-5 space-y-5">
         <Section title="Portada">
-          <CoverZone preview={preview} converting={converting} onFile={handleImageFile} onClear={handleClearCover} />
+          <CoverZone preview={preview} onFile={handleImageFile} onClear={handleClearCover} />
           {errors.cover && <p className="text-[11px] text-red-500 mt-2">⚠ {errors.cover}</p>}
         </Section>
       </div>

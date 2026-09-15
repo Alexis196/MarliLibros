@@ -3,8 +3,9 @@ import { randomUUID } from 'crypto';
 import { requireAdmin } from '@/lib/admin-auth';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { BOOK_COVERS_BUCKET, ensureBookCoversBucket } from '@/lib/storage';
+import { convertImageBufferToWebp } from '@/lib/image-server';
 
-const MAX_SIZE = 5 * 1024 * 1024; // 5MB
+const MAX_SIZE = 10 * 1024 * 1024; // 10MB (antes de convertir)
 
 export async function POST(req: NextRequest) {
   const auth = await requireAdmin();
@@ -14,17 +15,23 @@ export async function POST(req: NextRequest) {
     const formData = await req.formData();
     const file = formData.get('file');
 
-    if (!(file instanceof File) || file.type !== 'image/webp') {
-      return NextResponse.json({ error: 'La imagen debe estar en formato WebP.' }, { status: 400 });
+    if (!(file instanceof File)) {
+      return NextResponse.json({ error: 'No se recibió ninguna imagen.' }, { status: 400 });
     }
     if (file.size > MAX_SIZE) {
-      return NextResponse.json({ error: 'La imagen no puede superar los 5MB.' }, { status: 400 });
+      return NextResponse.json({ error: 'La imagen no puede superar los 10MB.' }, { status: 400 });
     }
 
     await ensureBookCoversBucket();
 
     const path = `${randomUUID()}.webp`;
-    const buffer = Buffer.from(await file.arrayBuffer());
+    const inputBuffer = Buffer.from(await file.arrayBuffer());
+    let buffer: Buffer;
+    try {
+      buffer = await convertImageBufferToWebp(inputBuffer, { maxWidth: 1000, quality: 82 });
+    } catch (err) {
+      return NextResponse.json({ error: err instanceof Error ? err.message : 'No pudimos procesar esa imagen.' }, { status: 400 });
+    }
 
     const { error } = await supabaseAdmin.storage
       .from(BOOK_COVERS_BUCKET)
